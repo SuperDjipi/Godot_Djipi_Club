@@ -1,0 +1,91 @@
+📁 STRUCTURE RECOMMANDÉE DU PROJET GODOT
+═══════════════════════════════════════
+
+votre_projet_godot/
+│
+├── 📁 scripts/                    ← CRÉEZ CE DOSSIER
+│   ├── 📄 ScrabbleConfig.gd      ← Autoload (Configuration)
+│   ├── 📄 TileManager.gd         ← Gestion des tuiles
+│   ├── 📄 RackManager.gd         ← Gestion du chevalet
+│   ├── 📄 BoardManager.gd        ← Gestion du plateau
+│   ├── 📄 DragDropController.gd  ← Drag & Drop + Auto-scroll
+│   └── 📄 ScrabbleGame.gd        ← Orchestrateur principal
+│
+├── 📁 scenes/
+│   └── 📄 main.tscn              ← Scène principale (attach ScrabbleGame.gd)
+│
+├── 📁 assets/
+│   ├── 📁 fonts/
+│   ├── 📁 images/
+│   └── 📁 sounds/
+│
+├── 📁 docs/ (optionnel)
+│   ├── 📄 START_HERE.md
+│   ├── 📄 INSTALLATION_RAPIDE.md
+│   ├── 📄 README_ARCHITECTURE.md
+│   └── 📄 ...
+│
+└── 📄 project.godot              ← Configuration Godot
+
+
+═══════════════════════════════════════
+FICHIERS LIVRÉS DANS /outputs/
+═══════════════════════════════════════
+
+📦 godot_refactored/
+   ├── ✅ ScrabbleConfig.gd (4.1 KB)
+   ├── ✅ TileManager.gd (3.7 KB)
+   ├── ✅ RackManager.gd (5.2 KB)
+   ├── ✅ BoardManager.gd (12 KB)
+   ├── ✅ DragDropController.gd (11 KB)
+   └── ✅ ScrabbleGame.gd (4.7 KB)
+
+📚 documentation/
+   ├── 📖 START_HERE.md
+   ├── 📖 INSTALLATION_RAPIDE.md
+   ├── 📖 CHANGELOG.md
+   ├── 📖 CORRECTION_AUTOSCROLL.md
+   ├── 📖 CORRECTION_TAILLES.md
+   ├── 📖 CORRECTIONS.md
+   ├── 📖 README_ARCHITECTURE.md
+   ├── 📖 GUIDE_MIGRATION.md
+   ├── 📖 INDEX.md
+   └── 📖 RESUME_FINAL.md
+
+
+═══════════════════════════════════════
+INSTALLATION RAPIDE (3 ÉTAPES)
+═══════════════════════════════════════
+
+1️⃣  Créer le dossier scripts/ dans Godot
+    → Clic droit FileSystem → New Folder → "scripts"
+
+2️⃣  Copier les 6 fichiers .gd dans scripts/
+    → Glisser-déposer depuis godot_refactored/
+
+3️⃣  Configurer l'autoload
+    → Project → Settings → Autoload
+    → Ajouter res://scripts/ScrabbleConfig.gd
+
+4️⃣  Attacher ScrabbleGame.gd à main.tscn
+    → Sélectionner node racine (Node2D)
+    → Inspector → Attach Script → scripts/ScrabbleGame.gd
+
+5️⃣  Tester avec F5 !
+
+
+═══════════════════════════════════════
+POURQUOI CETTE ORGANISATION ?
+═══════════════════════════════════════
+
+✅ Séparation claire code/assets/scènes
+✅ Standard de l'industrie
+✅ Facile à naviguer
+✅ Évolutif pour nouveaux modules
+✅ Compatible avec Git
+✅ Facilite la collaboration
+
+
+═══════════════════════════════════════
+VERSION : 1.3 | DATE : 26 Nov 2025
+═══════════════════════════════════════
