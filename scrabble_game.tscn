@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3 uid="uid://05771bnv3127"]
+
+[ext_resource type="Script" uid="uid://bacnisrvpqc8u" path="res://scrabble_game.gd" id="1_unrvt"]
+
+[node name="ScrabbleGame" type="Node2D"]
+script = ExtResource("1_unrvt")
