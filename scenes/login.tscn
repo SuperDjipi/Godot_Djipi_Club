@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://r4mb4gxpvnhn"]
 
-[ext_resource type="Script" uid="uid://diw575b3prv52" path="res://scripts/login.gd" id="1_cau7c"]
+[ext_resource type="Script" uid="uid://cqfsogqjddbam" path="res://scripts/login.gd" id="1_cau7c"]
 
 [node name="Control" type="Control"]
 layout_mode = 3
@@ -36,10 +36,18 @@ horizontal_alignment = 1
 layout_mode = 2
 placeholder_text = "Votre pseudo"
 
-[node name="RegisterButton" type="Button" parent="VBoxContainer"]
+[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+alignment = 1
+
+[node name="RegisterButton" type="Button" parent="VBoxContainer/HBoxContainer"]
 custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
 text = "S'inscrire"
+
+[node name="LoginButton" type="Button" parent="VBoxContainer/HBoxContainer"]
+layout_mode = 2
+text = "Se connecter"
 
 [node name="HSeparator" type="HSeparator" parent="VBoxContainer"]
 layout_mode = 2
@@ -55,16 +63,6 @@ vertical_alignment = 1
 layout_mode = 2
 placeholder_text = "Code de la partie (ex: ABCD"
 
-[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer"]
-layout_mode = 2
-alignment = 1
-
-[node name="StatusLabel" type="Label" parent="VBoxContainer"]
-layout_mode = 2
-text = "---"
-horizontal_alignment = 1
-autowrap_mode = 2
-
 [node name="JoinButton" type="Button" parent="VBoxContainer"]
 layout_mode = 2
 text = "Rejoindre"
@@ -72,3 +70,10 @@ text = "Rejoindre"
 [node name="CreateButton" type="Button" parent="VBoxContainer"]
 layout_mode = 2
 text = "Créer une partie"
+
+[node name="StatusLabel" type="Label" parent="VBoxContainer"]
+custom_minimum_size = Vector2(100, 0)
+layout_mode = 2
+text = "---"
+horizontal_alignment = 1
+autowrap_mode = 2

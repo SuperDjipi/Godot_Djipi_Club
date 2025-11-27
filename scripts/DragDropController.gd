@@ -9,6 +9,7 @@ class_name DragDropController
 # - Les animations de resize pendant le drag
 # - La détection des zones de dépôt
 # - La gestion des tuiles temporaires
+# - La réorganisation dynamique du chevalet
 # ============================================================================
 
 # Références aux managers
@@ -120,7 +121,7 @@ func _start_drag_from_board(tile_node: Panel, pos: Vector2i, parent: Node2D) -> 
 	tile_node.z_index = 100
 
 # ============================================================================
-# FONCTION : Mettre à jour le drag
+# FONCTION : Mettre à jour le drag (MODIFIÉE)
 # ============================================================================
 func update_drag(pos: Vector2) -> void:
 	current_mouse_pos = pos
@@ -128,6 +129,15 @@ func update_drag(pos: Vector2) -> void:
 	if dragging_tile:
 		var target_size = Vector2(board_manager.tile_size_board, board_manager.tile_size_board)
 		dragging_tile.global_position = pos - target_size / 2
+		
+		# ============================================
+		# NOUVEAU : Mise à jour du preview du chevalet
+		# ============================================
+		var from_rack_index = -1
+		if drag_origin.get("type") == "rack":
+			from_rack_index = drag_origin.get("pos", -1)
+		
+		rack_manager.update_rack_preview(pos, from_rack_index)
 		
 		# Auto-scroll si on est en mode plateau
 		if board_manager.is_board_focused:
@@ -137,7 +147,7 @@ func update_drag(pos: Vector2) -> void:
 	board_manager.update_board_drag(pos)
 
 # ============================================================================
-# FONCTION : Terminer le drag
+# FONCTION : Terminer le drag (MODIFIÉE)
 # ============================================================================
 func end_drag(pos: Vector2, parent: Node2D) -> void:
 	# Terminer le drag du plateau
@@ -152,8 +162,10 @@ func end_drag(pos: Vector2, parent: Node2D) -> void:
 	print("=== End drag at position:", pos)
 	var dropped = false
 	
-	# 1. Essayer de déposer sur le chevalet
-	dropped = _try_drop_on_rack(pos)
+	# ============================================
+	# MODIFIÉ : Nouveau système de drop sur le chevalet
+	# ============================================
+	dropped = _try_drop_on_rack_smart(pos)
 	
 	# 2. Si pas déposé, essayer le plateau
 	if not dropped:
@@ -172,34 +184,44 @@ func end_drag(pos: Vector2, parent: Node2D) -> void:
 		board_manager.animate_to_rack_view()
 
 # ============================================================================
-# FONCTION PRIVÉE : Essayer de déposer sur le chevalet
+# NOUVELLE FONCTION : Essayer de déposer sur le chevalet (version intelligente)
 # ============================================================================
-func _try_drop_on_rack(pos: Vector2) -> bool:
-	var rack_index = rack_manager.is_position_in_rack(pos)
-	if rack_index >= 0 and rack_manager.get_tile_at(rack_index) == null:
-		print("  -> Dropping on rack at index", rack_index)
+func _try_drop_on_rack_smart(pos: Vector2) -> bool:
+	"""
+	Utilise le système de réorganisation dynamique pour insérer la tuile
+	à la position calculée pendant le hover.
+	"""
+	var from_rack_index = -1
+	if drag_origin.get("type") == "rack":
+		from_rack_index = drag_origin.get("pos", -1)
+	
+	var insert_index = rack_manager.calculate_insert_index(pos, from_rack_index)
+	
+	if insert_index >= 0:
+		print("  -> Dropping on rack at index", insert_index, " (smart insert)")
 		
 		var tile_data = dragging_tile.get_meta("tile_data")
-		rack_manager.add_tile_at(rack_index, tile_data)
 		
-		# Redimensionner la tuile pour le chevalet
-		var tween = dragging_tile.create_tween()
-		var target_size = Vector2(rack_manager.tile_size_rack - 4, rack_manager.tile_size_rack - 4)
-		tween.tween_property(dragging_tile, "custom_minimum_size", target_size, 0.2)
-		
-		# Repositionner les labels
-		var letter_lbl = dragging_tile.get_node_or_null("LetterLabel")
-		var value_lbl = dragging_tile.get_node_or_null("ValueLabel")
-		if letter_lbl and value_lbl:
-			tween.tween_property(letter_lbl, "position", Vector2(rack_manager.tile_size_rack * 0.2, rack_manager.tile_size_rack * 0.05), 0.2)
-			tween.tween_property(value_lbl, "position", Vector2(rack_manager.tile_size_rack * 0.6, rack_manager.tile_size_rack * 0.55), 0.2)
-		
-		var cell = rack_manager.get_cell_at(rack_index)
-		dragging_tile.reparent(cell)
-		dragging_tile.position = Vector2(2, 2)
-		dragging_tile.z_index = 0
-		dragging_tile.remove_meta("temp")
-		return true
+		# Utiliser la nouvelle fonction d'insertion intelligente
+		if rack_manager.insert_tile_at(insert_index, tile_data, from_rack_index):
+			# Redimensionner la tuile pour le chevalet
+			var tween = dragging_tile.create_tween()
+			var target_size = Vector2(rack_manager.tile_size_rack - 4, rack_manager.tile_size_rack - 4)
+			tween.tween_property(dragging_tile, "custom_minimum_size", target_size, 0.2)
+			
+			# Repositionner les labels
+			var letter_lbl = dragging_tile.get_node_or_null("LetterLabel")
+			var value_lbl = dragging_tile.get_node_or_null("ValueLabel")
+			if letter_lbl and value_lbl:
+				tween.tween_property(letter_lbl, "position", Vector2(rack_manager.tile_size_rack * 0.2, rack_manager.tile_size_rack * 0.05), 0.2)
+				tween.tween_property(value_lbl, "position", Vector2(rack_manager.tile_size_rack * 0.6, rack_manager.tile_size_rack * 0.55), 0.2)
+			
+			var cell = rack_manager.get_cell_at(insert_index)
+			dragging_tile.reparent(cell)
+			dragging_tile.position = Vector2(2, 2)
+			dragging_tile.z_index = 0
+			dragging_tile.remove_meta("temp")
+			return true
 	
 	return false
 
@@ -255,6 +277,9 @@ func _return_to_origin() -> void:
 		dragging_tile.position = Vector2(2, 2)
 		dragging_tile.z_index = 0
 		dragging_tile.remove_meta("temp")
+		
+		# Rafraîchir l'affichage du chevalet
+		rack_manager._refresh_rack_visuals()
 	
 	elif drag_origin.type == "board":
 		var pos_vec = drag_origin.pos

@@ -1,6 +1,22 @@
 [gd_scene load_steps=2 format=3 uid="uid://05771bnv3127"]
 
-[ext_resource type="Script" uid="uid://ddrxqcqng5m00" path="res://scripts/ScrabbleGame.gd" id="1_unrvt"]
+[ext_resource type="Script" uid="uid://cqu1uiu6h18qf" path="res://scripts/ScrabbleGameMultiplayer.gd" id="1_pj0mk"]
 
 [node name="ScrabbleGame" type="Node2D"]
-script = ExtResource("1_unrvt")
+script = ExtResource("1_pj0mk")
+
+[node name="Label" type="Label" parent="."]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = 100.0
+offset_top = 100.0
+offset_right = 500.0
+offset_bottom = 200.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Le Bar CS"
+horizontal_alignment = 1
+vertical_alignment = 1
