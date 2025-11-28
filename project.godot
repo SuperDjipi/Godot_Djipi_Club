@@ -22,8 +22,8 @@ ScrabbleConfig="*res://scripts/ScrabbleConfig.gd"
 
 [display]
 
-window/size/viewport_width=720
-window/size/viewport_height=1280
+window/size/viewport_width=700
+window/size/viewport_height=1400
 window/stretch/mode="canvas_items"
 window/handheld/orientation=1
 

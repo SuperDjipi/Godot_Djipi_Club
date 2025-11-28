@@ -39,7 +39,7 @@ var bonus_map: Dictionary = {}
 
 # Taille des tuiles
 var tile_size_board: float = 40.0  # Sera calculée en fonction du chevalet
-var tile_size_rack: float = 70.0   # Référence depuis le rack
+var tile_size_rack: float = 0.0   # Référence depuis le rack
 
 # État du focus
 var is_board_focused: bool = false
@@ -63,33 +63,31 @@ func initialize(viewport_sz: Vector2, rack_tile_size: float) -> void:
 	viewport_size = viewport_sz
 	bonus_map = ScrabbleConfig.create_bonus_map()
 	
-	# CALCUL DU PLATEAU UNFOCUSED
-	# On veut que le plateau remplisse l'écran en mode unfocused
-	var board_width = viewport_size.x - ScrabbleConfig.BOARD_PADDING
-	var tile_size_calculated = floor(board_width / (ScrabbleConfig.BOARD_SIZE + 0.5))
-	
-	# CALCUL DU PLATEAU FOCUSED
-	# En mode focused, les tuiles du plateau ont la même taille que celles du chevalet
-	tile_size_rack = rack_tile_size
-	tile_size_board = tile_size_rack  # Important : même taille que le chevalet !
-	
-	print("📐 Calculs de taille :")
-	print("   - tile_size_calculated (unfocused) : ", tile_size_calculated)
-	print("   - tile_size_board (focused) : ", tile_size_board)
-	print("   - tile_size_rack : ", tile_size_rack)
+	tile_size_board = rack_tile_size
 
 # ============================================================================
 # FONCTION : Créer le plateau
 # ============================================================================
-func create_board(parent: Node2D) -> void:
+func create_board(parent: MarginContainer) -> void:
 	board_container = Control.new()
 	parent.add_child(board_container)
-	
+	# Taille du plateau focused (normal)
 	var total_board_pixel_size = ScrabbleConfig.BOARD_SIZE * (tile_size_board + 2)
-	var start_x = (viewport_size.x - total_board_pixel_size) / 2
-	board_container.position = Vector2(start_x, 80)
 	board_container.pivot_offset = Vector2(total_board_pixel_size / 2, total_board_pixel_size / 2)
+	# Le plateau en mode unfocused doit tenir dans l'écran
+	var board_width = viewport_size.x - ScrabbleConfig.BOARD_PADDING
+	board_scale_unfocused = board_width / total_board_pixel_size
+	board_container.scale = Vector2(board_scale_unfocused, board_scale_unfocused)
+	# La taille visible du plateau est sa taille réelle * son échelle.
+	var visible_width = total_board_pixel_size * board_scale_unfocused
+	var start_x = (viewport_size.x - visible_width) / 2
+	# Appliquer la position calculée
+	board_container.position = Vector2(start_x, 0) # Y=0 car le parent MarginContainer est déjà positionné verticalement
 	
+	print("📊 Échelles calculées :")
+	print("   - board_scale_unfocused : ", board_scale_unfocused," - board_scale_focused : ", board_scale_focused)
+	print("   - tile_size_board : ", tile_size_board)
+
 	# Créer les cellules du plateau
 	for y in range(ScrabbleConfig.BOARD_SIZE):
 		board.append([])
@@ -99,16 +97,6 @@ func create_board(parent: Node2D) -> void:
 			var cell = _create_board_cell(Vector2i(x, y))
 			board_container.add_child(cell)
 			board_cells[y].append(cell)
-	
-	# CALCUL DE L'ÉCHELLE UNFOCUSED
-	# Le plateau en mode unfocused doit tenir dans l'écran
-	var board_width = viewport_size.x - ScrabbleConfig.BOARD_PADDING
-	board_scale_unfocused = board_width / total_board_pixel_size
-	board_container.scale = Vector2(board_scale_unfocused, board_scale_unfocused)
-	
-	print("📊 Échelles calculées :")
-	print("   - board_scale_unfocused : ", board_scale_unfocused)
-	print("   - board_scale_focused : ", board_scale_focused)
 	
 	# Calculer les limites de déplacement
 	calculate_board_limits()
@@ -142,9 +130,19 @@ func _create_board_cell(pos: Vector2i) -> Panel:
 # ============================================================================
 func calculate_board_limits() -> void:
 	var total_board_pixel_size = ScrabbleConfig.BOARD_SIZE * (tile_size_board + 2)
-	board_max_x = viewport_size.x / 2
-	board_min_x = viewport_size.x / 2 - total_board_pixel_size
-	print("📏 Limites du plateau: min_x=", board_min_x, " max_x=", board_max_x)
+	var overflow_width = total_board_pixel_size - viewport_size.x
+
+	if overflow_width > 0:
+		# Le plateau est plus large que l'écran
+		board_max_x = 0 # La position la plus à gauche est 0
+		board_min_x = -overflow_width # La position la plus à droite est négative
+	else:
+		# Le plateau est moins large, on le centre et on bloque le mouvement.
+		var start_x = (viewport_size.x - total_board_pixel_size) / 2
+		board_min_x = start_x
+		board_max_x = start_x
+
+	print("📏 Limites de MARGE du plateau: min_x=", board_min_x, " max_x=", board_max_x)
 
 # ============================================================================
 # FONCTION : Animer vers la vue "plateau"
@@ -181,24 +179,42 @@ func animate_to_rack_view() -> void:
 # FONCTION : Auto-scroll du plateau
 # ============================================================================
 func auto_scroll_board(mouse_pos: Vector2) -> void:
-	var scroll_delta = 0.0
+	var should_scroll_left = false
+	var should_scroll_right = false
+	var intensity = 1.0
 	
 	# Vérifier le bord gauche
 	if mouse_pos.x < ScrabbleConfig.AUTO_SCROLL_MARGIN:
-		var intensity = 1.0 - (mouse_pos.x / ScrabbleConfig.AUTO_SCROLL_MARGIN)
-		scroll_delta = ScrabbleConfig.AUTO_SCROLL_SPEED * intensity
+		intensity = 1.0 - (mouse_pos.x / ScrabbleConfig.AUTO_SCROLL_MARGIN)
+		should_scroll_left = true
 	
 	# Vérifier le bord droit
-	elif mouse_pos.x > viewport_size.x - ScrabbleConfig.AUTO_SCROLL_MARGIN:
+	if mouse_pos.x > viewport_size.x - ScrabbleConfig.AUTO_SCROLL_MARGIN:
 		var distance_from_right = viewport_size.x - mouse_pos.x
-		var intensity = 1.0 - (distance_from_right / ScrabbleConfig.AUTO_SCROLL_MARGIN)
-		scroll_delta = -ScrabbleConfig.AUTO_SCROLL_SPEED * intensity
-	
-	# Appliquer le défilement
+		intensity = 1.0 - (distance_from_right / ScrabbleConfig.AUTO_SCROLL_MARGIN)
+		should_scroll_right = true
+
+	# Calculer le déplacement
+	var scroll_delta = 0.0
+	if should_scroll_right:
+		scroll_delta -= ScrabbleConfig.AUTO_SCROLL_SPEED * intensity # Pour voir plus à droite, on décale la marge vers la gauche (négatif)
+	if should_scroll_left:
+		scroll_delta += ScrabbleConfig.AUTO_SCROLL_SPEED * intensity # Pour voir plus à gauche, on décale la marge vers la droite (positif)
+
+	# Si un déplacement est nécessaire, on l'applique
+	#if scroll_delta != 0.0:
+		#var current_margin_variant = board_container.get("margin_left")
+		#var current_margin = float(current_margin_variant) if current_margin_variant != null else 0.0
+		#var new_margin = current_margin + scroll_delta
+#
+		## Appliquer la nouvelle marge en la contraignant dans les limites
+		#board_container.set("margin_left", clamp(new_margin, board_min_x, board_max_x))
+
 	if scroll_delta != 0.0:
 		var new_x = board_container.position.x + scroll_delta
 		new_x = clamp(new_x, board_min_x, board_max_x)
 		board_container.position.x = new_x
+		print("scroll : ",board_container.position.x," ",board_max_x,"/",board_min_x)
 
 # ============================================================================
 # FONCTION : Démarrer le drag du plateau
@@ -216,6 +232,7 @@ func start_board_drag(pos: Vector2) -> bool:
 	if board_rect.has_point(pos):
 		is_dragging_board = true
 		board_drag_start_pos = pos
+		var initial_margin_variant = board_container.get("margin_left")
 		board_initial_pos = board_container.position
 		return true
 	

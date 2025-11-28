@@ -6,3 +6,5 @@ archive/
 build/
 scripts/*.uid
 /android/
+/node_server/node_modules/
+/node_server/src/*.json

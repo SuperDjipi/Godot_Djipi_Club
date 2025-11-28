@@ -9,7 +9,7 @@ extends Node
 
 # --- DIMENSIONS DU JEU ---
 const BOARD_SIZE = 15
-const TILE_SIZE = 40
+const TILE_SIZE = 70
 const RACK_SIZE = 7
 const BOARD_PADDING = 20
 
@@ -23,20 +23,20 @@ const COLOR_CENTER = Color(1.0, 0.8, 1.0)
 
 # --- DISTRIBUTION DES LETTRES EN FRANÇAIS ---
 const LETTER_DISTRIBUTION = {
-	"A": {"count": 9, "value": 1}, "B": {"count": 2, "value": 3},
-	"C": {"count": 2, "value": 3}, "D": {"count": 3, "value": 2},
-	"E": {"count": 15, "value": 1}, "F": {"count": 2, "value": 4},
-	"G": {"count": 2, "value": 2}, "H": {"count": 2, "value": 4},
-	"I": {"count": 8, "value": 1}, "J": {"count": 1, "value": 8},
-	"K": {"count": 1, "value": 10}, "L": {"count": 5, "value": 1},
-	"M": {"count": 3, "value": 2}, "N": {"count": 6, "value": 1},
-	"O": {"count": 6, "value": 1}, "P": {"count": 2, "value": 3},
-	"Q": {"count": 1, "value": 8}, "R": {"count": 6, "value": 1},
-	"S": {"count": 6, "value": 1}, "T": {"count": 6, "value": 1},
-	"U": {"count": 6, "value": 1}, "V": {"count": 2, "value": 4},
-	"W": {"count": 1, "value": 10}, "X": {"count": 1, "value": 10},
-	"Y": {"count": 1, "value": 10}, "Z": {"count": 1, "value": 10},
-	"?": {"count": 2, "value": 0}  # Jokers
+	"A": {"count": 9, "value": 1.0}, "B": {"count": 2, "value": 3.0},
+	"C": {"count": 2, "value": 3.0}, "D": {"count": 3, "value": 2.0},
+	"E": {"count": 15, "value": 1.0}, "F": {"count": 2, "value": 4.0},
+	"G": {"count": 2, "value": 2.0}, "H": {"count": 2, "value": 4.0},
+	"I": {"count": 8, "value": 1.0}, "J": {"count": 1, "value": 8.0},
+	"K": {"count": 1, "value": 10.0}, "L": {"count": 5, "value": 1.0},
+	"M": {"count": 3, "value": 2.0}, "N": {"count": 6, "value": 1.0},
+	"O": {"count": 6, "value": 1.0}, "P": {"count": 2, "value": 3.0},
+	"Q": {"count": 1, "value": 8.0}, "R": {"count": 6, "value": 1.0},
+	"S": {"count": 6, "value": 1.0}, "T": {"count": 6, "value": 1.0},
+	"U": {"count": 6, "value": 1.0}, "V": {"count": 2, "value": 4.0},
+	"W": {"count": 1, "value": 10.0}, "X": {"count": 1, "value": 10.0},
+	"Y": {"count": 1, "value": 10.0}, "Z": {"count": 1, "value": 10.0},
+	"?": {"count": 2, "value": 0.0}  # Jokers
 }
 
 # --- PARAMÈTRES D'AUTO-SCROLL ---

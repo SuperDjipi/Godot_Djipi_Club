@@ -67,10 +67,15 @@ func create_tile_visual(tile_data: Dictionary, parent: Control, tile_size_arg: f
 	letter_lbl.position = Vector2(tile_size_arg * 0.2, tile_size_arg * 0.05)
 	tile.add_child(letter_lbl)
 	
-	# Label pour la valeur
+	# Label pour la valeur (affichage en float si nécessaire)
 	var value_lbl = Label.new()
 	value_lbl.name = "ValueLabel"
-	value_lbl.text = str(tile_data.value)
+	# Afficher sans décimale si c'est un nombre entier
+	var value = tile_data.value
+	if value == floor(value):
+		value_lbl.text = str(int(value))
+	else:
+		value_lbl.text = "%.1f" % value
 	value_lbl.add_theme_font_size_override("font_size", int(tile_size_arg * 0.25))
 	value_lbl.position = Vector2(tile_size_arg * 0.6, tile_size_arg * 0.55)
 	tile.add_child(value_lbl)

@@ -312,7 +312,7 @@ func _on_connected_to_server():
 	update_status("✅ Connecté ! En attente d'autres joueurs...")
 	
 	# Transition vers la scène de jeu multijoueur
-	get_tree().change_scene_to_file("res://scenes/scrabble_game.tscn")
+	get_tree().change_scene_to_file("res://scenes/ScrabbleGameMultiplayer.tscn")
 
 func _on_game_state_received(payload: Dictionary):
 	"""Appelé quand on reçoit l'état du jeu"""
