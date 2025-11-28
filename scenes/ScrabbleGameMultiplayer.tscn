@@ -1,0 +1,135 @@
+[gd_scene load_steps=3 format=3 uid="uid://citeknyi2pqdp"]
+
+[ext_resource type="Script" uid="uid://cqu1uiu6h18qf" path="res://scripts/ScrabbleGameMultiplayer.gd" id="1_main_script"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_bumx7"]
+
+[node name="ScrabbleGame" type="Node2D"]
+material = SubResource("ShaderMaterial_bumx7")
+script = ExtResource("1_main_script")
+
+[node name="MainContainer" type="Control" parent="."]
+custom_minimum_size = Vector2(700, 1000)
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MainContainer"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="ScoreBoard" type="PanelContainer" parent="MainContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 80)
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="MainContainer/VBoxContainer/ScoreBoard"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 8
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MainContainer/VBoxContainer/ScoreBoard/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="StatusLabel" type="Label" parent="MainContainer/VBoxContainer/ScoreBoard/MarginContainer/HBoxContainer"]
+layout_mode = 2
+text = "En attente des joueurs..."
+vertical_alignment = 1
+
+[node name="Spacer" type="Control" parent="MainContainer/VBoxContainer/ScoreBoard/MarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="TurnLabel" type="Label" parent="MainContainer/VBoxContainer/ScoreBoard/MarginContainer/HBoxContainer"]
+layout_mode = 2
+vertical_alignment = 1
+
+[node name="Spacer2" type="Control" parent="MainContainer/VBoxContainer/ScoreBoard/MarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ScoreLabel" type="Label" parent="MainContainer/VBoxContainer/ScoreBoard/MarginContainer/HBoxContainer"]
+layout_mode = 2
+text = "Score : 0"
+
+[node name="ValidationPanel" type="PanelContainer" parent="MainContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="MainContainer/VBoxContainer/ValidationPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 8
+
+[node name="ValidationLabel" type="Label" parent="MainContainer/VBoxContainer/ValidationPanel/MarginContainer"]
+layout_mode = 2
+horizontal_alignment = 1
+
+[node name="BoardContainer" type="MarginContainer" parent="MainContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="Control" type="Control" parent="MainContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="RackContainer" type="HBoxContainer" parent="MainContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 100)
+layout_mode = 2
+alignment = 1
+
+[node name="MarginContainer" type="MarginContainer" parent="MainContainer/VBoxContainer/RackContainer"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_right = 8
+
+[node name="ActionButtons" type="PanelContainer" parent="MainContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+size_flags_horizontal = 4
+
+[node name="MarginContainer" type="MarginContainer" parent="MainContainer/VBoxContainer/ActionButtons"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 8
+
+[node name="HBoxContainer" type="HBoxContainer" parent="MainContainer/VBoxContainer/ActionButtons/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="UndoButton" type="Button" parent="MainContainer/VBoxContainer/ActionButtons/MarginContainer/HBoxContainer"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+disabled = true
+text = "Annuler"
+
+[node name="ShuffleButton" type="Button" parent="MainContainer/VBoxContainer/ActionButtons/MarginContainer/HBoxContainer"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Mélanger"
+
+[node name="Control" type="Control" parent="MainContainer/VBoxContainer/ActionButtons/MarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="PassButton" type="Button" parent="MainContainer/VBoxContainer/ActionButtons/MarginContainer/HBoxContainer"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Passer"
+
+[node name="PlayButton" type="Button" parent="MainContainer/VBoxContainer/ActionButtons/MarginContainer/HBoxContainer"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+disabled = true
+text = "Jouer"
