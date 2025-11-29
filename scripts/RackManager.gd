@@ -124,7 +124,7 @@ func get_cell_at(index: int) -> Panel:
 func is_position_in_rack(global_pos: Vector2) -> int:
 	for i in range(ScrabbleConfig.RACK_SIZE):
 		var cell = rack_cells[i]
-		var cell_rect = Rect2(cell.global_position, cell.size * rack_container.scale)
+		var cell_rect = Rect2(cell.global_position, cell.size) # * rack_container.scale)
 		if cell_rect.has_point(global_pos):
 			return i
 	return -1

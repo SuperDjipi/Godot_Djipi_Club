@@ -24,6 +24,65 @@ import { v4 as generateUUID } from 'uuid';
 import { initializeDatabase } from './db/database.js';
 import { handleNewConnection } from './services/webSocketManager.js';
 
+// Juste après vos imports, avant la section "GESTION DES PARTIES EN MÉMOIRE"
+
+/**
+ * Crée une partie de test pré-remplie pour le développement.
+ * Code : TEST
+ * Joueurs : Alpha, Beta
+ * La partie est démarrée et les tuiles sont distribuées.
+ */
+function createTestGame() {
+    const TEST_GAME_ID = 'TEST';
+
+    // 1. Créer les profils des joueurs de test
+    const playerAlpha: Player = {
+        id: '6dee5c79-729f-4179-aff3-5982b9479119', // ID factice pour le test
+        name: 'Alpha',
+        score: 0,
+        rack: [], // Sera rempli ci-dessous
+        isActive: true,
+    };
+    const playerBeta: Player = {
+        id: '4b17dea3-a071-4474-aec9-31daa9aa22e5', // ID factice pour le test
+        name: 'Djipi',
+        score: 0,
+        rack: [],
+        isActive: false,
+    };
+
+    // 2. Créer une pioche de tuiles et la distribuer
+    let tileBag = createTileBag();
+    const { drawnTiles: alphaTiles, newBag: bagAfterAlpha } = drawTiles(tileBag, 7);
+    const { drawnTiles: betaTiles, newBag: finalBag } = drawTiles(bagAfterAlpha, 7);
+    playerAlpha.rack = alphaTiles;
+    playerBeta.rack = betaTiles;
+
+    // 3. Créer l'état complet de la partie de test
+    const testGame: GameState = {
+        id: TEST_GAME_ID,
+        hostId: playerAlpha.id,
+        board: createEmptyBoard(),
+        players: [playerAlpha, playerBeta],
+        tileBag: finalBag,
+        status: GameStatus.PLAYING, // La partie est déjà en cours !
+        moves: [],
+        turnNumber: 1,
+        currentPlayerIndex: 0, // Alpha commence
+    };
+
+    // 4. Enregistrer la partie dans la mémoire du serveur
+    games.set(TEST_GAME_ID, testGame);
+    initGameConnections(TEST_GAME_ID); // Préparer le salon WebSocket
+
+    console.log(`🚀 Partie de TEST créée et démarrée. Code: ${TEST_GAME_ID}`);
+    console.log(`   - Joueur 1: ${playerAlpha.name} (ID: ${playerAlpha.id})`);
+    console.log(`   - Joueur 2: ${playerBeta.name} (ID: ${playerBeta.id})`);
+}
+
+// --- GESTION DES PARTIES EN MÉMOIRE ---
+// ... le reste de votre code ...
+
 // --- GESTION DES PARTIES EN MÉMOIRE ---
 
 /**
@@ -137,6 +196,7 @@ export function broadcastGameState(gameId: string, gameState: GameState) {
 
 async function startServer() {
     const db = await initializeDatabase(); // On initialise la DB en premier
+    createTestGame();
     const app = express();
     // Middleware pour servir les fichiers statiques (HTML, CSS, JS) du dossier 'public'.
     app.use(express.static('public'));
@@ -357,6 +417,51 @@ app.get('/api/players/:playerId/games', (req, res) => {
             res.status(500).send({ message: "Erreur interne du serveur." });
         }
     });
+
+// Dans src/index.ts, après la route app.post('/api/games/:gameId/join', ...);
+
+/**
+ * Route API pour permettre à un joueur de se "reconnecter" à une partie déjà en cours.
+ * Cette route est cruciale pour reprendre une partie après avoir fermé/rouvert l'application
+ * ou pour rejoindre une partie de test déjà démarrée.
+ * Attend une requête POST sur /api/games/:gameId/reconnect
+ * @param gameId L'ID de la partie à rejoindre (dans l'URL).
+ * @body { "playerId": "xxxx-yyyy-zzzz" }
+ */
+app.post('/api/games/:gameId/reconnect', (req, res) => {
+    const { gameId } = req.params;
+    const { playerId } = req.body;
+
+    if (!playerId) {
+        return res.status(400).send({ message: "L'ID du joueur est requis." });
+    }
+
+    const game = games.get(gameId.toUpperCase());
+
+    // 1. La partie doit exister
+    if (!game) {
+        return res.status(404).send({ message: "Partie non trouvée." });
+    }
+
+    // 2. Le joueur doit faire partie de cette partie
+    const isPlayerInGame = game.players.some(p => p.id === playerId);
+    if (!isPlayerInGame) {
+        return res.status(403).send({ message: "Vous ne faites pas partie de cette partie." });
+    }
+
+    // 3. La partie doit être en cours (ou terminée, on peut vouloir voir le score final)
+    if (game.status === GameStatus.WAITING_FOR_PLAYERS) {
+         return res.status(403).send({ message: "Cette partie n'a pas encore commencé. Utilisez l'API de 'join'." });
+    }
+
+    // Si toutes les conditions sont remplies, on autorise la reconnexion.
+    console.log(`✅ Autorisation de reconnexion pour le joueur ${playerId} à la partie ${game.id}`);
+    res.status(200).send({
+        message: "Reconnexion autorisée. Établissement de la connexion WebSocket...",
+        gameId: game.id,
+    });
+});
+
     // --- DÉBUT DE L'API DE CRÉATION DE PARTIE ---
     /**
      * Route API pour créer une nouvelle partie.

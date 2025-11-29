@@ -11,12 +11,14 @@ class_name MoveValidator
 # ============================================================================
 
 var board_manager: BoardManager
+var dictionary_manager: DictionaryManager
 
 # ============================================================================
 # FONCTION : Initialiser le validateur
 # ============================================================================
-func initialize(board_mgr: BoardManager) -> void:
+func initialize(board_mgr: BoardManager, dict_mgr: DictionaryManager = null) -> void:
 	board_manager = board_mgr
+	dictionary_manager = dict_mgr
 
 # ============================================================================
 # FONCTION : Valider un mouvement
@@ -52,14 +54,41 @@ func validate_move(temp_tiles: Array) -> Dictionary:
 	if not _is_connected_to_board(temp_tiles):
 		result.errors.append("Les tuiles doivent être connectées aux tuiles existantes")
 		return result
+
+	# 4. Extraire tous les mots formés
+	var main_word_data = _extract_main_word(temp_tiles)
+	var secondary_words_data = _extract_secondary_words(temp_tiles, main_word_data.is_horizontal)
 	
-	# 4. Calculer le score
-	var score_data = _calculate_score(temp_tiles)
-	result.score = score_data.score
-	result.words = score_data.words
+	var all_words = [main_word_data] + secondary_words_data
 	
-	# Si on arrive ici, le mouvement est valide
-	result.valid = true
+	# 5. Valider avec le dictionnaire (si disponible)
+	if dictionary_manager and dictionary_manager.is_loaded:
+		for word_data in all_words:
+			var word = word_data.word
+			var is_valid = dictionary_manager.is_valid_word(word)
+			
+			result.words.append({
+				"word": word,
+				"valid": is_valid
+			})
+			
+			if not is_valid:
+				result.errors.append("Mot invalide : " + word)
+	else:
+		# Pas de dictionnaire : accepter tous les mots
+		for word_data in all_words:
+			result.words.append({
+				"word": word_data.word,
+				"valid": true
+			})
+	
+	# 6. Le mouvement est valide si tous les mots le sont
+	result.valid = result.errors.is_empty()
+	
+	# 7. Calculer le score (si valide)
+	if result.valid:
+		var score_data = _calculate_score(temp_tiles)
+		result.score = score_data.score
 	
 	return result
 
@@ -217,3 +246,201 @@ func get_validation_message(validation_result: Dictionary) -> String:
 	else:
 		var errors = "\n".join(validation_result.errors)
 		return "❌ Mouvement invalide :\n%s" % errors
+
+# ============================================================================
+# FONCTION PRIVÉE : Extraire le mot principal
+# ============================================================================
+func _extract_main_word(temp_tiles: Array) -> Dictionary:
+	"""
+	Retourne : {
+		"word": "CHAT",
+		"positions": [Vector2i(7,7), Vector2i(8,7), Vector2i(9,7), Vector2i(10,7)],
+		"is_horizontal": false
+	}
+	"""
+	
+	if temp_tiles.is_empty():
+		return {"word": "", "positions": [], "is_horizontal": true}
+	
+	# Déterminer la direction
+	var first_pos = temp_tiles[0]
+	var is_horizontal = true
+	for pos in temp_tiles:
+		if pos.y != first_pos.y:
+			is_horizontal = false
+			break
+	
+	# Trier les positions
+	var sorted_tiles = temp_tiles.duplicate()
+	if is_horizontal:
+		sorted_tiles.sort_custom(func(a, b): return a.x < b.x)
+	else:
+		sorted_tiles.sort_custom(func(a, b): return a.y < b.y)
+	
+	# Trouver les extrémités (en incluant les tuiles déjà sur le plateau)
+	var start_pos = sorted_tiles[0]
+	var end_pos = sorted_tiles[-1]
+	
+	# Étendre vers le début
+	if is_horizontal:
+		while start_pos.x > 0:
+			var prev_pos = Vector2i(start_pos.x - 1, start_pos.y)
+			if board_manager.get_tile_at(prev_pos) == null:
+				break
+			var cell = board_manager.get_cell_at(prev_pos)
+			var tile_node = TileManager.get_tile_in_cell(cell)
+			if tile_node and not tile_node.has_meta("temp"):
+				start_pos = prev_pos
+			else:
+				break
+	else:
+		while start_pos.y > 0:
+			var prev_pos = Vector2i(start_pos.x, start_pos.y - 1)
+			if board_manager.get_tile_at(prev_pos) == null:
+				break
+			var cell = board_manager.get_cell_at(prev_pos)
+			var tile_node = TileManager.get_tile_in_cell(cell)
+			if tile_node and not tile_node.has_meta("temp"):
+				start_pos = prev_pos
+			else:
+				break
+	
+	# Étendre vers la fin
+	if is_horizontal:
+		while end_pos.x < ScrabbleConfig.BOARD_SIZE - 1:
+			var next_pos = Vector2i(end_pos.x + 1, end_pos.y)
+			if board_manager.get_tile_at(next_pos) == null:
+				break
+			var cell = board_manager.get_cell_at(next_pos)
+			var tile_node = TileManager.get_tile_in_cell(cell)
+			if tile_node and not tile_node.has_meta("temp"):
+				end_pos = next_pos
+			else:
+				break
+	else:
+		while end_pos.y < ScrabbleConfig.BOARD_SIZE - 1:
+			var next_pos = Vector2i(end_pos.x, end_pos.y + 1)
+			if board_manager.get_tile_at(next_pos) == null:
+				break
+			var cell = board_manager.get_cell_at(next_pos)
+			var tile_node = TileManager.get_tile_in_cell(cell)
+			if tile_node and not tile_node.has_meta("temp"):
+				end_pos = next_pos
+			else:
+				break
+	
+	# Construire le mot et la liste des positions
+	var word = ""
+	var positions = []
+	
+	if is_horizontal:
+		for x in range(start_pos.x, end_pos.x + 1):
+			var pos = Vector2i(x, start_pos.y)
+			var tile_data = board_manager.get_tile_at(pos)
+			if tile_data:
+				word += tile_data.letter
+				positions.append(pos)
+	else:
+		for y in range(start_pos.y, end_pos.y + 1):
+			var pos = Vector2i(start_pos.x, y)
+			var tile_data = board_manager.get_tile_at(pos)
+			if tile_data:
+				word += tile_data.letter
+				positions.append(pos)
+	
+	return {
+		"word": word,
+		"positions": positions,
+		"is_horizontal": is_horizontal
+	}
+	
+	# ============================================================================
+# FONCTION PRIVÉE : Extraire les mots secondaires (perpendiculaires)
+# ============================================================================
+func _extract_secondary_words(temp_tiles: Array, is_main_horizontal: bool) -> Array:
+	"""
+	Retourne : [
+		{"word": "CHAT", "positions": [...]},
+		{"word": "CHIEN", "positions": [...]},
+		...
+	]
+	"""
+	
+	var secondary_words = []
+	
+	for tile_pos in temp_tiles:
+		var word_data = _extract_word_at_position(tile_pos, not is_main_horizontal)
+		
+		# Ne garder que les mots de 2 lettres ou plus
+		if word_data.word.length() >= 2:
+			secondary_words.append(word_data)
+	
+	return secondary_words
+
+# ============================================================================
+# FONCTION PRIVÉE : Extraire un mot à une position donnée
+# ============================================================================
+func _extract_word_at_position(pos: Vector2i, is_horizontal: bool) -> Dictionary:
+	"""
+	Extrait le mot qui passe par la position donnée dans la direction spécifiée
+	"""
+	
+	var start_pos = pos
+	var end_pos = pos
+	
+	# Trouver le début
+	if is_horizontal:
+		while start_pos.x > 0:
+			var prev_pos = Vector2i(start_pos.x - 1, start_pos.y)
+			if board_manager.get_tile_at(prev_pos) != null:
+				start_pos = prev_pos
+			else:
+				break
+	else:
+		while start_pos.y > 0:
+			var prev_pos = Vector2i(start_pos.x, start_pos.y - 1)
+			if board_manager.get_tile_at(prev_pos) != null:
+				start_pos = prev_pos
+			else:
+				break
+	
+	# Trouver la fin
+	if is_horizontal:
+		while end_pos.x < ScrabbleConfig.BOARD_SIZE - 1:
+			var next_pos = Vector2i(end_pos.x + 1, end_pos.y)
+			if board_manager.get_tile_at(next_pos) != null:
+				end_pos = next_pos
+			else:
+				break
+	else:
+		while end_pos.y < ScrabbleConfig.BOARD_SIZE - 1:
+			var next_pos = Vector2i(end_pos.x, end_pos.y + 1)
+			if board_manager.get_tile_at(next_pos) != null:
+				end_pos = next_pos
+			else:
+				break
+	
+	# Construire le mot
+	var word = ""
+	var positions = []
+	
+	if is_horizontal:
+		for x in range(start_pos.x, end_pos.x + 1):
+			var p = Vector2i(x, start_pos.y)
+			var tile_data = board_manager.get_tile_at(p)
+			if tile_data:
+				word += tile_data.letter
+				positions.append(p)
+	else:
+		for y in range(start_pos.y, end_pos.y + 1):
+			var p = Vector2i(start_pos.x, y)
+			var tile_data = board_manager.get_tile_at(p)
+			if tile_data:
+				word += tile_data.letter
+				positions.append(p)
+	
+	return {
+		"word": word,
+		"positions": positions,
+		"is_horizontal": is_horizontal
+	}

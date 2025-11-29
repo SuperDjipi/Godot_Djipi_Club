@@ -11,6 +11,7 @@ extends Control
 @onready var join_button = $VBoxContainer/JoinButton
 @onready var create_button = $VBoxContainer/CreateButton
 @onready var status_label = $VBoxContainer/StatusLabel
+@onready var api_request = $APIRequest
 @onready var network_manager = $"/root/NetworkManager"
 
 const SERVER_API_URL = "http://djipi.club:8080/api"
@@ -251,53 +252,83 @@ func _on_create_game_completed(result, response_code, headers, body):
 		var message = response.get("message", "Erreur inconnue")
 		update_status("❌ " + message)
 		create_button.disabled = false
-
+		
 # ============================================================================
-# REJOINDRE UNE PARTIE
+# REJOINDRE UNE PARTIE (LOGIQUE CORRIGÉE ET SÉCURISÉE)
 # ============================================================================
 
 func _on_join_pressed():
 	var game_code = game_code_input.text.strip_edges().to_upper()
-	
+
 	if game_code.is_empty():
 		update_status("❌ Entrez un code de partie")
 		return
-	
+
 	if not is_logged_in:
 		update_status("❌ Vous devez d'abord vous connecter")
 		return
-	
-	update_status("⏳ Connexion à la partie...")
-	join_button.disabled = true
-	
-	# D'abord rejoindre via l'API REST
-	var http = HTTPRequest.new()
-	add_child(http)
-	http.request_completed.connect(_on_join_game_completed.bind(game_code))
-	
-	var body = JSON.stringify({
-		"playerId": player_id
-	})
-	
-	var headers = ["Content-Type: application/json"]
-	http.request(SERVER_API_URL + "/games/" + game_code + "/join", headers, HTTPClient.METHOD_POST, body)
 
-func _on_join_game_completed(result, response_code, headers, body, game_code: String):
-	await get_tree().create_timer(0.1).timeout
-	
-	var response = JSON.parse_string(body.get_string_from_utf8())
-	
-	if response_code == 200:  # OK
-		update_status("✅ Partie rejointe !")
-		# Attendre un peu que le serveur soit prêt
+	update_status("⏳ Connexion à la partie " + game_code + "...")
+	join_button.disabled = true
+
+	# Étape 1 : Tenter de se reconnecter
+	print("🤝 Étape 1: Tentative de RECONNEXION...")
+	_send_reconnect_request(game_code)
+
+func _send_reconnect_request(game_code: String):
+	# On s'assure que le callback précédent est déconnecté avant d'en connecter un nouveau
+	if api_request.is_connected("request_completed", _on_reconnect_completed):
+		api_request.disconnect("request_completed", _on_reconnect_completed)
+	if api_request.is_connected("request_completed", _on_join_completed):
+		api_request.disconnect("request_completed", _on_join_completed)
+
+	# On connecte le callback pour CETTE requête spécifique
+	api_request.request_completed.connect(_on_reconnect_completed.bind(game_code), CONNECT_ONE_SHOT)
+
+	var body = JSON.stringify({"playerId": player_id})
+	var headers = ["Content-Type: application/json"]
+	var url = SERVER_API_URL + "/games/" + game_code + "/reconnect"
+
+	api_request.request(url, headers, HTTPClient.METHOD_POST, body)
+
+func _on_reconnect_completed(result, response_code, headers, body, game_code: String):
+	if response_code == 200: # Reconnexion réussie !
+		update_status("✅ Reconnexion autorisée !")
 		await get_tree().create_timer(0.5).timeout
-		# Maintenant établir la connexion WebSocket
 		_connect_to_game(game_code)
 	else:
-		var message = response.get("message", "Erreur inconnue")
+		# La reconnexion a échoué, on passe à l'étape 2.
+		print("🤝 Reconnexion échouée, passage à l'étape 2: Tentative de REJOINDRE...")
+		_send_join_request(game_code)
+
+func _send_join_request(game_code: String):
+	# On s'assure que le callback précédent est déconnecté
+	if api_request.is_connected("request_completed", _on_reconnect_completed):
+		api_request.disconnect("request_completed", _on_reconnect_completed)
+	if api_request.is_connected("request_completed", _on_join_completed):
+		api_request.disconnect("request_completed", _on_join_completed)
+
+	# On connecte le callback pour CETTE requête
+	api_request.request_completed.connect(_on_join_completed.bind(game_code), CONNECT_ONE_SHOT)
+
+	var body = JSON.stringify({"playerId": player_id})
+	var headers = ["Content-Type: application/json"]
+	var url = SERVER_API_URL + "/games/" + game_code + "/join"
+
+	api_request.request(url, headers, HTTPClient.METHOD_POST, body)
+
+func _on_join_completed(result, response_code, headers, body, game_code: String):
+	if response_code == 200: # Join réussi !
+		update_status("✅ Partie rejointe !")
+		await get_tree().create_timer(0.5).timeout
+		_connect_to_game(game_code)
+	else:
+		# Si rejoindre échoue aussi, c'est une erreur finale.
+		var response = JSON.parse_string(body.get_string_from_utf8())
+		var message = response.get("message", "Impossible de rejoindre ou de se reconnecter à la partie.")
 		update_status("❌ " + message)
 		join_button.disabled = false
-
+		
 # ============================================================================
 # CONNEXION WEBSOCKET
 # ============================================================================

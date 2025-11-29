@@ -77,3 +77,5 @@ layout_mode = 2
 text = "---"
 horizontal_alignment = 1
 autowrap_mode = 2
+
+[node name="APIRequest" type="HTTPRequest" parent="."]

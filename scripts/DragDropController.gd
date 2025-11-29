@@ -159,14 +159,12 @@ func end_drag(pos: Vector2, parent: Node2D) -> void:
 	print("=== End drag at position:", pos)
 	var dropped = false
 	
-	# NOTE: Le dépôt intra-chevalet est commenté pour l'instant
-	# TODO: Réimplémenter avec gestion correcte des swaps de tuiles
-	# 1. Essayer de déposer sur le chevalet
-	# dropped = _try_drop_on_rack(pos)
+	 # 1. Essayer de déposer sur le chevalet
+	dropped = _try_drop_on_rack(pos)
 	
 	# 2. Essayer le plateau
-	# if not dropped:
-	dropped = _try_drop_on_board(pos)
+	if not dropped:
+		dropped = _try_drop_on_board(pos)
 	
 	# 3. Si toujours pas déposé, retourner à l'origine
 	if not dropped:
@@ -179,36 +177,213 @@ func end_drag(pos: Vector2, parent: Node2D) -> void:
 # ============================================================================
 # FONCTION PRIVÉE : Essayer de déposer sur le chevalet
 # ============================================================================
-# NOTE: Cette fonction est actuellement désactivée (voir end_drag)
-# TODO: Réimplémenter avec gestion correcte des swaps de tuiles
 func _try_drop_on_rack(pos: Vector2) -> bool:
 	var rack_index = rack_manager.is_position_in_rack(pos)
-	if rack_index >= 0 and rack_manager.get_tile_at(rack_index) == null:
+	if rack_index >= 0:
 		print("  -> Dropping on rack at index", rack_index)
 		
 		var tile_data = dragging_tile.get_meta("tile_data")
-		rack_manager.add_tile_at(rack_index, tile_data)
+		var is_from_rack = (drag_origin.type == "rack")
+		var origin_index = drag_origin.pos if is_from_rack else -1
 		
-		# Redimensionner la tuile pour le chevalet
-		var tween = dragging_tile.create_tween()
-		var target_size = Vector2(rack_manager.tile_size_rack - 4, rack_manager.tile_size_rack - 4)
-		tween.tween_property(dragging_tile, "custom_minimum_size", target_size, 0.2)
+		# Cas 1 : On dépose sur la même case d'origine (simple retour)
+		if is_from_rack and origin_index == rack_index:
+			print("  -> Dropping on same slot, simple replacement")
+			rack_manager.add_tile_at(rack_index, tile_data)
+			_resize_tile_for_rack(dragging_tile, rack_index)
+			return true
 		
-		# Repositionner les labels
-		var letter_lbl = dragging_tile.get_node_or_null("LetterLabel")
-		var value_lbl = dragging_tile.get_node_or_null("ValueLabel")
-		if letter_lbl and value_lbl:
-			tween.tween_property(letter_lbl, "position", Vector2(rack_manager.tile_size_rack * 0.2, rack_manager.tile_size_rack * 0.05), 0.2)
-			tween.tween_property(value_lbl, "position", Vector2(rack_manager.tile_size_rack * 0.6, rack_manager.tile_size_rack * 0.55), 0.2)
-		
-		var cell = rack_manager.get_cell_at(rack_index)
-		dragging_tile.reparent(cell)
-		dragging_tile.position = Vector2(2, 2)
-		dragging_tile.z_index = 0
-		dragging_tile.remove_meta("temp")
-		return true
+		# Cas 2 : Insertion avec décalage
+		if _can_insert_in_rack(is_from_rack):
+			_insert_tile_in_rack(rack_index, tile_data, origin_index)
+			_resize_tile_for_rack(dragging_tile, rack_index)
+			return true
+		else:
+			print("  -> Cannot insert: rack is full")
+			return false
 	
 	return false
+	
+	# ============================================================================
+# FONCTION PRIVÉE : Vérifier si on peut insérer une tuile dans le rack
+# ============================================================================
+func _can_insert_in_rack(is_from_rack: bool) -> bool:
+	# Si la tuile vient du rack, on a déjà une place libre (la sienne)
+	if is_from_rack:
+		return true
+	
+	# Sinon, vérifier qu'il y a au moins une case vide
+	for i in range(ScrabbleConfig.RACK_SIZE):
+		if rack_manager.get_tile_at(i) == null:
+			return true
+	
+	return false
+	
+# ============================================================================
+# FONCTION PRIVÉE : Insérer une tuile dans le rack avec décalage
+# ============================================================================
+func _insert_tile_in_rack(target_index: int, tile_data: Dictionary, origin_index: int) -> void:
+	print("    Inserting tile at index ", target_index, " (origin: ", origin_index, ")")
+	
+	var is_from_rack = (origin_index >= 0)
+	
+	# Étape 1 : Collecter toutes les tuiles SAUF celle qu'on déplace
+	var other_tiles = []  # Tuiles qui ne bougent pas (ou qui se décalent)
+	
+	for i in range(ScrabbleConfig.RACK_SIZE):
+		if is_from_rack and i == origin_index:
+			continue  # Ignorer la tuile d'origine
+		
+		var data = rack_manager.get_tile_at(i)
+		if data != null:
+			var cell = rack_manager.get_cell_at(i)
+			var node = TileManager.get_tile_in_cell(cell)
+			
+			if node != null:
+				other_tiles.append({
+					"data": data,
+					"node": node,
+					"index": i
+				})
+	
+	print("    Collected ", other_tiles.size(), " other tiles")
+	
+	# Étape 2 : Vider le rack
+	for i in range(ScrabbleConfig.RACK_SIZE):
+		rack_manager.remove_tile_at(i)
+	
+	# Étape 3 : Placer la tuile draggée à target_index
+	rack_manager.add_tile_at(target_index, tile_data)
+	print("    Placed dragged tile at index ", target_index)
+	
+	# Étape 4 : Replacer les autres tuiles en évitant target_index
+	var next_slot = 0
+	for tile_info in other_tiles:
+		# Trouver le prochain slot disponible
+		while next_slot == target_index or next_slot >= ScrabbleConfig.RACK_SIZE:
+			next_slot += 1
+			if next_slot >= ScrabbleConfig.RACK_SIZE:
+				break
+		
+		if next_slot >= ScrabbleConfig.RACK_SIZE:
+			print("    WARNING: No more slots available!")
+			break
+		
+		var data = tile_info.data
+		var node = tile_info.node
+		var cell = rack_manager.get_cell_at(next_slot)
+		
+		rack_manager.add_tile_at(next_slot, data)
+		
+		if node != null:
+			node.reparent(cell)
+			node.position = Vector2(2, 2)
+			node.z_index = 0
+		
+		print("    Placed tile at slot ", next_slot)
+		next_slot += 1
+	
+	print("    Insert completed")
+# ============================================================================
+# FONCTION PRIVÉE : Animer le réarrangement du rack
+# ============================================================================
+func _animate_rack_reorganization(tiles_data: Array, tiles_nodes: Array) -> void:
+	print("    Animating rack reorganization with ", tiles_data.size(), " tiles")
+	
+	var animation_duration = 0.2  # Durée de l'animation en secondes
+	
+	for i in range(min(tiles_data.size(), ScrabbleConfig.RACK_SIZE)):
+		var data = tiles_data[i]
+		var node = tiles_nodes[i]
+		var target_cell = rack_manager.get_cell_at(i)
+		
+		if node == null:
+			print("    ERROR: null node at index ", i)
+			continue
+		
+		# Ajouter les données au rack
+		rack_manager.add_tile_at(i, data)
+		
+		# Calculer la position cible (globale)
+		var target_global_pos = target_cell.global_position + Vector2(2, 2)
+		
+		# Créer l'animation
+		var tween = node.create_tween()
+		tween.set_ease(Tween.EASE_OUT)
+		tween.set_trans(Tween.TRANS_CUBIC)
+		
+		# Animer la position globale
+		tween.tween_property(node, "global_position", target_global_pos, animation_duration)
+		
+		# À la fin de l'animation, reparenter correctement
+		if node != dragging_tile:
+			tween.finished.connect(func():
+				_finalize_tile_position(node, target_cell, i)
+			)
+	
+	print("    Animations started")
+	
+# ============================================================================
+# FONCTION PRIVÉE : Finaliser la position d'une tuile après animation
+# ============================================================================
+func _finalize_tile_position(tile_node: Panel, cell: Panel, index: int) -> void:
+	# Reparenter dans la cellule cible
+	tile_node.reparent(cell)
+	tile_node.position = Vector2(2, 2)
+	tile_node.z_index = 0
+	
+	print("    Tile finalized at index ", index)
+	
+# ============================================================================
+# FONCTION PRIVÉE : Échanger deux tuiles du chevalet
+# ============================================================================
+func _swap_rack_tiles(index_a: int, index_b: int) -> void:
+	print("  -> Swapping rack tiles at indices ", index_a, " and ", index_b)
+	
+	# Récupérer les deux tuiles
+	var tile_a_data = dragging_tile.get_meta("tile_data")
+	var tile_b_data = rack_manager.get_tile_at(index_b)
+	
+	var cell_a = rack_manager.get_cell_at(index_a)
+	var cell_b = rack_manager.get_cell_at(index_b)
+	
+	var tile_b_node = TileManager.get_tile_in_cell(cell_b)
+	
+	# Échanger les données
+	rack_manager.add_tile_at(index_b, tile_a_data)
+	rack_manager.add_tile_at(index_a, tile_b_data)
+	
+	# Replacer visuellement la tuile A (celle qu'on draggait)
+	_resize_tile_for_rack(dragging_tile, index_b)
+	
+	# Déplacer visuellement la tuile B vers la position A
+	if tile_b_node:
+		tile_b_node.reparent(cell_a)
+		tile_b_node.position = Vector2(2, 2)
+		
+# ============================================================================
+# FONCTION PRIVÉE : Redimensionner une tuile pour le chevalet
+# ============================================================================
+func _resize_tile_for_rack(tile_node: Panel, rack_index: int) -> void:
+	print("    [_resize_tile_for_rack] Resizing tile for rack index ", rack_index)
+	# Redimensionner la tuile pour le chevalet
+	var tween = tile_node.create_tween()
+	var target_size = Vector2(rack_manager.tile_size_rack - 4, rack_manager.tile_size_rack - 4)
+	tween.tween_property(tile_node, "custom_minimum_size", target_size, 0.2)
+	
+	# Repositionner les labels
+	var letter_lbl = tile_node.get_node_or_null("LetterLabel")
+	var value_lbl = tile_node.get_node_or_null("ValueLabel")
+	if letter_lbl and value_lbl:
+		tween.tween_property(letter_lbl, "position", Vector2(rack_manager.tile_size_rack * 0.2, rack_manager.tile_size_rack * 0.05), 0.2)
+		tween.tween_property(value_lbl, "position", Vector2(rack_manager.tile_size_rack * 0.6, rack_manager.tile_size_rack * 0.55), 0.2)
+	
+	var cell = rack_manager.get_cell_at(rack_index)
+	tile_node.reparent(cell)
+	tile_node.position = Vector2(2, 2)
+	tile_node.z_index = 0
+	tile_node.remove_meta("temp")
+	print("    [_resize_tile_for_rack] Done")
 
 # ============================================================================
 # FONCTION PRIVÉE : Essayer de déposer sur le plateau
@@ -244,18 +419,6 @@ func _return_to_origin() -> void:
 		var index = drag_origin.pos
 		var tile_data = dragging_tile.get_meta("tile_data")
 		rack_manager.add_tile_at(index, tile_data)
-		
-		# Redimensionner
-		var tween = dragging_tile.create_tween()
-		var target_size = Vector2(rack_manager.tile_size_rack - 4, rack_manager.tile_size_rack - 4)
-		tween.tween_property(dragging_tile, "custom_minimum_size", target_size, 0.2)
-		
-		# Repositionner les labels
-		var letter_lbl = dragging_tile.get_node_or_null("LetterLabel")
-		var value_lbl = dragging_tile.get_node_or_null("ValueLabel")
-		if letter_lbl and value_lbl:
-			tween.tween_property(letter_lbl, "position", Vector2(rack_manager.tile_size_rack * 0.2, rack_manager.tile_size_rack * 0.05), 0.2)
-			tween.tween_property(value_lbl, "position", Vector2(rack_manager.tile_size_rack * 0.6, rack_manager.tile_size_rack * 0.55), 0.2)
 		
 		var cell = rack_manager.get_cell_at(index)
 		dragging_tile.reparent(cell)

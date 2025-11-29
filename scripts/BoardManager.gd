@@ -100,7 +100,7 @@ func create_board(parent: MarginContainer) -> void:
 	
 	# Calculer les limites de déplacement
 	calculate_board_limits()
-	
+	is_board_focused = false
 	print("🎲 Plateau créé : ", ScrabbleConfig.BOARD_SIZE, "x", ScrabbleConfig.BOARD_SIZE)
 
 # ============================================================================
@@ -201,20 +201,10 @@ func auto_scroll_board(mouse_pos: Vector2) -> void:
 	if should_scroll_left:
 		scroll_delta += ScrabbleConfig.AUTO_SCROLL_SPEED * intensity # Pour voir plus à gauche, on décale la marge vers la droite (positif)
 
-	# Si un déplacement est nécessaire, on l'applique
-	#if scroll_delta != 0.0:
-		#var current_margin_variant = board_container.get("margin_left")
-		#var current_margin = float(current_margin_variant) if current_margin_variant != null else 0.0
-		#var new_margin = current_margin + scroll_delta
-#
-		## Appliquer la nouvelle marge en la contraignant dans les limites
-		#board_container.set("margin_left", clamp(new_margin, board_min_x, board_max_x))
-
 	if scroll_delta != 0.0:
 		var new_x = board_container.position.x + scroll_delta
 		new_x = clamp(new_x, board_min_x, board_max_x)
 		board_container.position.x = new_x
-		print("scroll : ",board_container.position.x," ",board_max_x,"/",board_min_x)
 
 # ============================================================================
 # FONCTION : Démarrer le drag du plateau

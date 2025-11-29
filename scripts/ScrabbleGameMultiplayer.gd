@@ -13,6 +13,7 @@ var rack_manager: RackManager
 var drag_drop_controller: DragDropController
 var game_state_sync: GameStateSync
 var move_validator: MoveValidator
+var dictionary_manager: DictionaryManager
 
 # --- RÉFÉRENCES RÉSEAU ---
 @onready var network_manager = $"/root/NetworkManager"
@@ -21,16 +22,16 @@ var move_validator: MoveValidator
 var viewport_size: Vector2
 
 # --- RÉFÉRENCES UI (depuis la scène) ---
-@onready var status_label = $MainContainer/VBoxContainer/ScoreBoard/MarginContainer/HBoxContainer/StatusLabel
-@onready var turn_label = $MainContainer/VBoxContainer/ScoreBoard/MarginContainer/HBoxContainer/TurnLabel
-@onready var score_label = $MainContainer/VBoxContainer/ScoreBoard/MarginContainer/HBoxContainer/ScoreLabel
-@onready var validation_label = $MainContainer/VBoxContainer/ValidationPanel/MarginContainer/ValidationLabel
-@onready var board_container = $MainContainer/VBoxContainer/BoardContainer
-@onready var rack_container = $MainContainer/VBoxContainer/RackContainer
-@onready var undo_button = $MainContainer/VBoxContainer/ActionButtons/MarginContainer/HBoxContainer/UndoButton
-@onready var shuffle_button = $MainContainer/VBoxContainer/ActionButtons/MarginContainer/HBoxContainer/ShuffleButton
-@onready var pass_button = $MainContainer/VBoxContainer/ActionButtons/MarginContainer/HBoxContainer/PassButton
-@onready var play_button = $MainContainer/VBoxContainer/ActionButtons/MarginContainer/HBoxContainer/PlayButton
+@onready var status_label = $CanvasLayer/MainContainer/VBoxContainer/ScoreBoard/MarginContainer/HBoxContainer/StatusLabel
+@onready var turn_label = $CanvasLayer/MainContainer/VBoxContainer/ScoreBoard/MarginContainer/HBoxContainer/TurnLabel
+@onready var score_label = $CanvasLayer/MainContainer/VBoxContainer/ScoreBoard/MarginContainer/HBoxContainer/ScoreLabel
+@onready var validation_label = $CanvasLayer/MainContainer/VBoxContainer/ValidationPanel/MarginContainer/ValidationLabel
+@onready var board_container = $CanvasLayer/MainContainer/VBoxContainer/BoardContainer
+@onready var rack_container = $CanvasLayer/MainContainer/VBoxContainer/RackContainer
+@onready var undo_button = $CanvasLayer/MainContainer/VBoxContainer/ActionButtons/MarginContainer/HBoxContainer/UndoButton
+@onready var shuffle_button = $CanvasLayer/MainContainer/VBoxContainer/ActionButtons/MarginContainer/HBoxContainer/ShuffleButton
+@onready var pass_button = $CanvasLayer/MainContainer/VBoxContainer/ActionButtons/MarginContainer/HBoxContainer/PassButton
+@onready var play_button = $CanvasLayer/MainContainer/VBoxContainer/ActionButtons/MarginContainer/HBoxContainer/PlayButton
 
 # ============================================================================
 # FONCTION : Initialisation du jeu
@@ -40,7 +41,6 @@ func _ready():
 	viewport_size = get_viewport_rect().size
 	
 	print("🎮 Démarrage du jeu de Scrabble (Mode Multijoueur - Structure UI)")
-	print("📱 Taille de l'écran : ", viewport_size)
 	
 	# Vérifier qu'on est bien connecté
 	if not network_manager.is_connected_to_server():
@@ -67,10 +67,22 @@ func _ready():
 	# On crée le chevalet dans le conteneur de la scène
 	rack_manager.create_rack(rack_container)
 	
+	# Créer et charger le dictionnaire
+	dictionary_manager = DictionaryManager.new()
+	add_child(dictionary_manager)
+	
+	if not dictionary_manager.load_dictionaries():
+		print("❌ ERREUR : Impossible de charger les dictionnaires !")
+		# Décider quoi faire : continuer sans validation ou bloquer ?
+		# Pour l'instant, on continue
+	else:
+		var stats = dictionary_manager.get_stats()
+		print("📊 Dictionnaire : ", stats.total, " mots chargés")
+	
 	# 4. Créer et initialiser le MoveValidator
 	move_validator = MoveValidator.new()
 	add_child(move_validator)
-	move_validator.initialize(board_manager)
+	move_validator.initialize(board_manager, dictionary_manager)
 	
 	# 5. Créer et initialiser le DragDropController
 	drag_drop_controller = DragDropController.new()
@@ -94,7 +106,15 @@ func _ready():
 	# 8. Initialiser l'UI
 	_initialize_ui()
 	
-	print("✅ Jeu initialisé avec succès !")
+	# Forcer explicitement l'état unfocused après l'initialisation complète
+	call_deferred("_force_initial_view")
+	print("✅ Jeu initialisé avec succès ! après fiv")
+
+func _force_initial_view() -> void:
+	"""Force la vue initiale (unfocused) après l'initialisation"""
+	board_manager.is_board_focused = true  # On triche : on dit qu'il est focused
+	board_manager.animate_to_rack_view()   # Pour qu'il anime vers unfocused
+	print("✅ Jeu initialisé avec succès ! in fiv")
 	print("⏳ En attente du démarrage de la partie...")
 
 # ============================================================================
@@ -168,6 +188,11 @@ func _validate_current_move() -> void:
 # FONCTION : Afficher le résultat de validation
 # ============================================================================
 func _show_validation_result(result: Dictionary) -> void:
+	# Log des mots trouvés
+	print("🔍 Mots formés :")
+	for word_info in result.words:
+		var status = "✅" if word_info.valid else "❌"
+		print("  ", status, " ", word_info.word)
 	# Mettre à jour le label
 	validation_label.text = move_validator.get_validation_message(result)
 	
@@ -481,15 +506,15 @@ func _on_back_to_menu() -> void:
 func animate_to_board_view() -> void:
 	board_manager.animate_to_board_view()
 	
-	var tween = rack_manager.rack_container.create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(rack_manager.rack_container, "scale", Vector2(0.8, 0.8), 0.3).set_trans(Tween.TRANS_SINE)
-	tween.tween_property(rack_manager.rack_container, "position:y", viewport_size.y - 60, 0.3).set_trans(Tween.TRANS_SINE)
+	#var tween = rack_manager.rack_container.create_tween()
+	#tween.set_parallel(true)
+	#tween.tween_property(rack_manager.rack_container, "scale", Vector2(0.8, 0.8), 0.3).set_trans(Tween.TRANS_SINE)
+	#tween.tween_property(rack_manager.rack_container, "position:y", viewport_size.y - 60, 0.3).set_trans(Tween.TRANS_SINE)
 
 func animate_to_rack_view() -> void:
 	board_manager.animate_to_rack_view()
 	
-	var tween = rack_manager.rack_container.create_tween()
-	tween.set_parallel(true)
-	tween.tween_property(rack_manager.rack_container, "scale", Vector2(1.0, 1.0), 0.3).set_trans(Tween.TRANS_SINE)
-	tween.tween_property(rack_manager.rack_container, "position:y", viewport_size.y - rack_manager.tile_size_rack - 40, 0.3).set_trans(Tween.TRANS_SINE)
+	#var tween = rack_manager.rack_container.create_tween()
+	#tween.set_parallel(true)
+	#tween.tween_property(rack_manager.rack_container, "scale", Vector2(1.0, 1.0), 0.3).set_trans(Tween.TRANS_SINE)
+	#tween.tween_property(rack_manager.rack_container, "position:y", viewport_size.y - rack_manager.tile_size_rack - 40, 0.3).set_trans(Tween.TRANS_SINE)
