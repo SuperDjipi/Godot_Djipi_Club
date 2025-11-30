@@ -128,3 +128,49 @@ func is_position_in_rack(global_pos: Vector2) -> int:
 		if cell_rect.has_point(global_pos):
 			return i
 	return -1
+
+# ============================================================================
+# FONCTION : Mélanger les tuiles du chevalet
+# ============================================================================
+func shuffle_rack() -> void:
+	print("🔀 Mélange du chevalet...")
+	
+	# Étape 1 : Collecter toutes les tuiles (données + visuels)
+	var tiles_info = []  # Liste de {data: ..., node: ...}
+	
+	for i in range(ScrabbleConfig.RACK_SIZE):
+		var data = rack[i]
+		if data != null:
+			var cell = rack_cells[i]
+			var node = TileManager.get_tile_in_cell(cell)
+			
+			if node != null:
+				tiles_info.append({
+					"data": data,
+					"node": node
+				})
+	
+	# Étape 2 : Mélanger les données
+	tiles_info.shuffle()
+	
+	# Étape 3 : Vider le chevalet
+	for i in range(ScrabbleConfig.RACK_SIZE):
+		rack[i] = null
+	
+	# Étape 4 : Replacer les tuiles mélangées
+	for i in range(tiles_info.size()):
+		var info = tiles_info[i]
+		var data = info.data
+		var node = info.node
+		var cell = rack_cells[i]
+		
+		# Mettre à jour les données
+		rack[i] = data
+		
+		# Repositionner le visuel
+		if node != null:
+			node.reparent(cell)
+			node.position = Vector2(2, 2)
+			node.z_index = 0
+	
+	print("✅ Chevalet mélangé : ", tiles_info.size(), " tuiles")

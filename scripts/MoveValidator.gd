@@ -216,27 +216,95 @@ func _is_connected_to_board(temp_tiles: Array) -> bool:
 func _calculate_score(temp_tiles: Array) -> Dictionary:
 	var result = {
 		"score": 0,
-		"words": []
+		"details": []
 	}
 	
-	# Pour l'instant, calcul simplifié
-	# TODO: Implémenter le calcul complet avec les multiplicateurs
+	# Extraire tous les mots formés
+	var main_word_data = _extract_main_word(temp_tiles)
+	var secondary_words_data = _extract_secondary_words(temp_tiles, main_word_data.is_horizontal)
 	
-	var base_score = 0
-	for pos in temp_tiles:
-		var tile_data = board_manager.get_tile_at(pos)
-		if tile_data:
-			base_score += tile_data.value
+	var all_words_data = [main_word_data] + secondary_words_data
 	
-	# Bonus si on utilise toutes ses tuiles (50 points)
+	# Calculer le score de chaque mot
+	var total_score = 0
+	
+	for word_data in all_words_data:
+		var word_score = _calculate_word_score(word_data, temp_tiles)
+		total_score += word_score.score
+		
+		result.details.append({
+			"word": word_data.word,
+			"score": word_score.score,
+			"breakdown": word_score.breakdown
+		})
+	
+	# Bonus Scrabble : +50 si on utilise les 7 tuiles
 	if temp_tiles.size() == ScrabbleConfig.RACK_SIZE:
-		base_score += 50
+		total_score += 50
+		result.details.append({
+			"word": "BONUS SCRABBLE",
+			"score": 50,
+			"breakdown": "7 tuiles utilisées"
+		})
 	
-	result.score = base_score
-	result.words = ["MOT_TEMPORAIRE"]  # TODO: Extraire les vrais mots
-	
+	result.score = total_score
 	return result
 
+# ============================================================================
+# FONCTION PRIVÉE : Calculer le score d'un mot
+# ============================================================================
+func _calculate_word_score(word_data: Dictionary, temp_tiles: Array) -> Dictionary:
+	"""
+	Calcule le score d'un mot en tenant compte des multiplicateurs
+	"""
+	var positions = word_data.positions
+	var word = word_data.word
+	
+	var letter_score = 0
+	var word_multiplier = 1
+	var breakdown = []
+	
+	for pos in positions:
+		var tile_data = board_manager.get_tile_at(pos)
+		if not tile_data:
+			continue
+		
+		var letter_value = tile_data.value
+		var is_new_tile = temp_tiles.has(pos)
+		
+		# Appliquer les multiplicateurs seulement pour les nouvelles tuiles
+		if is_new_tile:
+			var bonus = board_manager.bonus_map.get(pos, "")
+			
+			match bonus:
+				"L2":
+					letter_value *= 2
+					breakdown.append("%s×2 (L2)" % tile_data.letter)
+				"L3":
+					letter_value *= 3
+					breakdown.append("%s×3 (L3)" % tile_data.letter)
+				"W2":
+					word_multiplier *= 2
+					breakdown.append("%s + W2" % tile_data.letter)
+				"W3":
+					word_multiplier *= 3
+					breakdown.append("%s + W3" % tile_data.letter)
+				"CENTER":
+					word_multiplier *= 2
+					breakdown.append("%s + CENTER(W2)" % tile_data.letter)
+				_:
+					breakdown.append("%s" % tile_data.letter)
+		else:
+			breakdown.append("%s (déjà)" % tile_data.letter)
+		
+		letter_score += letter_value
+	
+	var final_score = letter_score * word_multiplier
+	
+	return {
+		"score": final_score,
+		"breakdown": "%s = %d × %d = %d" % [word, letter_score, word_multiplier, final_score]
+	}
 # ============================================================================
 # FONCTION : Obtenir un message de validation formaté
 # ============================================================================
@@ -338,14 +406,24 @@ func _extract_main_word(temp_tiles: Array) -> Dictionary:
 			var pos = Vector2i(x, start_pos.y)
 			var tile_data = board_manager.get_tile_at(pos)
 			if tile_data:
-				word += tile_data.letter
+			# ✅ Utiliser assigned_letter si c'est un joker
+				var letter = tile_data.assigned_letter if tile_data.is_joker else tile_data.letter
+			# ✅ PROTECTION : Si le joker n'a pas de lettre, utiliser "?"
+				if letter == null:
+					letter = "?"
+				word += letter
 				positions.append(pos)
 	else:
 		for y in range(start_pos.y, end_pos.y + 1):
 			var pos = Vector2i(start_pos.x, y)
 			var tile_data = board_manager.get_tile_at(pos)
 			if tile_data:
-				word += tile_data.letter
+			# ✅ Utiliser assigned_letter si c'est un joker
+				var letter = tile_data.assigned_letter if tile_data.is_joker else tile_data.letter
+							# ✅ PROTECTION : Si le joker n'a pas de lettre, utiliser "?"
+				if letter == null:
+					letter = "?"
+				word += letter
 				positions.append(pos)
 	
 	return {
@@ -429,14 +507,24 @@ func _extract_word_at_position(pos: Vector2i, is_horizontal: bool) -> Dictionary
 			var p = Vector2i(x, start_pos.y)
 			var tile_data = board_manager.get_tile_at(p)
 			if tile_data:
-				word += tile_data.letter
+			# ✅ Utiliser assigned_letter si c'est un joker
+				var letter = tile_data.assigned_letter if tile_data.is_joker else tile_data.letter
+							# ✅ PROTECTION : Si le joker n'a pas de lettre, utiliser "?"
+				if letter == null:
+					letter = "?"
+				word += letter
 				positions.append(p)
 	else:
 		for y in range(start_pos.y, end_pos.y + 1):
 			var p = Vector2i(start_pos.x, y)
 			var tile_data = board_manager.get_tile_at(p)
 			if tile_data:
-				word += tile_data.letter
+			# ✅ Utiliser assigned_letter si c'est un joker
+				var letter = tile_data.assigned_letter if tile_data.is_joker else tile_data.letter
+							# ✅ PROTECTION : Si le joker n'a pas de lettre, utiliser "?"
+				if letter == null:
+					letter = "?"
+				word += letter
 				positions.append(p)
 	
 	return {

@@ -185,6 +185,15 @@ func _try_drop_on_rack(pos: Vector2) -> bool:
 		var tile_data = dragging_tile.get_meta("tile_data")
 		var is_from_rack = (drag_origin.type == "rack")
 		var origin_index = drag_origin.pos if is_from_rack else -1
+				
+		# ✅ Réinitialiser le joker si on le ramène du plateau
+		if drag_origin.type == "board" and tile_data.is_joker and tile_data.assigned_letter != null:
+			print("    Réinitialisation du joker")
+			tile_data.assigned_letter = null
+			# Appeler la fonction du ScrabbleGame
+			var game = get_parent()
+			if game.has_method("_reset_joker_visual"):
+				game._reset_joker_visual(dragging_tile)
 		
 		# Cas 1 : On dépose sur la même case d'origine (simple retour)
 		if is_from_rack and origin_index == rack_index:
@@ -404,7 +413,14 @@ func _try_drop_on_board(pos: Vector2) -> bool:
 		
 		if not temp_tiles.has(board_pos):
 			temp_tiles.append(board_pos)
-		
+				
+		# ✅ NOUVEAU : Si c'est un joker, demander la lettre
+		if tile_data.is_joker and tile_data.assigned_letter == null:
+			# Appeler le popup via le ScrabbleGame
+			var game = get_parent()
+			if game.has_method("_create_joker_letter_popup"):
+				game._create_joker_letter_popup(board_pos, dragging_tile)
+	
 		return true
 	
 	return false

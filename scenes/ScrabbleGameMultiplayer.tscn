@@ -31,38 +31,6 @@ theme_override_constants/separation = 8
 custom_minimum_size = Vector2(0, 80)
 layout_mode = 2
 
-[node name="MarginContainer" type="MarginContainer" parent="CanvasLayer/MainContainer/VBoxContainer/ScoreBoard"]
-layout_mode = 2
-theme_override_constants/margin_left = 16
-theme_override_constants/margin_top = 8
-theme_override_constants/margin_right = 16
-theme_override_constants/margin_bottom = 8
-
-[node name="HBoxContainer" type="HBoxContainer" parent="CanvasLayer/MainContainer/VBoxContainer/ScoreBoard/MarginContainer"]
-layout_mode = 2
-theme_override_constants/separation = 16
-
-[node name="StatusLabel" type="Label" parent="CanvasLayer/MainContainer/VBoxContainer/ScoreBoard/MarginContainer/HBoxContainer"]
-layout_mode = 2
-text = "En attente des joueurs..."
-vertical_alignment = 1
-
-[node name="Spacer" type="Control" parent="CanvasLayer/MainContainer/VBoxContainer/ScoreBoard/MarginContainer/HBoxContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="TurnLabel" type="Label" parent="CanvasLayer/MainContainer/VBoxContainer/ScoreBoard/MarginContainer/HBoxContainer"]
-layout_mode = 2
-vertical_alignment = 1
-
-[node name="Spacer2" type="Control" parent="CanvasLayer/MainContainer/VBoxContainer/ScoreBoard/MarginContainer/HBoxContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-
-[node name="ScoreLabel" type="Label" parent="CanvasLayer/MainContainer/VBoxContainer/ScoreBoard/MarginContainer/HBoxContainer"]
-layout_mode = 2
-text = "Score : 0"
-
 [node name="ValidationPanel" type="PanelContainer" parent="CanvasLayer/MainContainer/VBoxContainer"]
 custom_minimum_size = Vector2(0, 60)
 layout_mode = 2
@@ -112,7 +80,7 @@ alignment = 1
 custom_minimum_size = Vector2(120, 0)
 layout_mode = 2
 disabled = true
-text = "↶ Annuler"
+text = "↶ Rappeler"
 
 [node name="ShuffleButton" type="Button" parent="CanvasLayer/MainContainer/VBoxContainer/ActionButtons/MarginContainer/HBoxContainer"]
 custom_minimum_size = Vector2(120, 0)
