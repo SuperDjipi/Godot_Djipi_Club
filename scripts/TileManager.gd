@@ -58,16 +58,19 @@ func create_tile_visual(tile_data: Dictionary, parent: Control, tile_size_arg: f
 	tile.custom_minimum_size = Vector2(tile_size_arg - 4, tile_size_arg - 4)
 	tile.position = Vector2(2, 2)
 	tile.modulate = Color(0.95, 0.9, 0.7)
-	
+		# Déterminer quelle lettre afficher
+	var display_letter = tile_data.letter
+	if tile_data.is_joker and tile_data.assigned_letter != null:
+		display_letter = tile_data.assigned_letter  # ✅ Afficher la lettre assignée
 	# Label pour la lettre
 	var letter_lbl = Label.new()
 	letter_lbl.name = "LetterLabel"
-	letter_lbl.text = tile_data.letter
+	letter_lbl.text = display_letter
 	letter_lbl.add_theme_font_size_override("font_size", int(tile_size_arg * 0.5))
 	letter_lbl.position = Vector2(tile_size_arg * 0.2, tile_size_arg * 0.05)
 	tile.add_child(letter_lbl)
 	
-	# Label pour la valeur (affichage en float si nécessaire)
+	# Label pour la valeur 
 	var value_lbl = Label.new()
 	value_lbl.name = "ValueLabel"
 	# Afficher sans décimale si c'est un nombre entier

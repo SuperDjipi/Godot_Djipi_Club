@@ -28,67 +28,90 @@ func initialize(board_mgr: BoardManager, dict_mgr: DictionaryManager = null) -> 
 # - score: int (score calculé)
 # - errors: Array[String] (liste des erreurs)
 # ============================================================================
+# ============================================================================
+# FONCTION : Valider un mouvement (version améliorée)
+# ============================================================================
 func validate_move(temp_tiles: Array) -> Dictionary:
 	var result = {
 		"valid": false,
-		"score": 0,
-		"errors": [],
-		"words": []
+		"total_score": 0,
+		"words": [],
+		"bonus_scrabble": 0,
+		"rule_error": ""
 	}
 	
+	# Vérifications de règles
 	if temp_tiles.is_empty():
-		result.errors.append("Aucune tuile placée")
+		result.rule_error = "Aucune tuile placée"
 		return result
 	
-	# 1. Vérifier que les tuiles sont alignées
 	if not _are_tiles_aligned(temp_tiles):
-		result.errors.append("Les tuiles doivent être alignées (ligne ou colonne)")
+		result.rule_error = "Tuiles non alignées"
 		return result
 	
-	# 2. Vérifier la continuité
 	if not _are_tiles_continuous(temp_tiles):
-		result.errors.append("Les tuiles doivent être continues (pas de trous)")
+		result.rule_error = "Tuiles non continues"
 		return result
 	
-	# 3. Vérifier la connexion au plateau existant (sauf premier coup)
 	if not _is_connected_to_board(temp_tiles):
-		result.errors.append("Les tuiles doivent être connectées aux tuiles existantes")
+		result.rule_error = "Non connecté au plateau"
 		return result
-
-	# 4. Extraire tous les mots formés
+	
+	# Extraire tous les mots formés
 	var main_word_data = _extract_main_word(temp_tiles)
 	var secondary_words_data = _extract_secondary_words(temp_tiles, main_word_data.is_horizontal)
+	var all_words_data = [main_word_data] + secondary_words_data
 	
-	var all_words = [main_word_data] + secondary_words_data
+	print("MV dbg: main_word = ", main_word_data.word)
+	print("MV dbg: secondary_words = ", secondary_words_data)
 	
-	# 5. Valider avec le dictionnaire (si disponible)
-	if dictionary_manager and dictionary_manager.is_loaded:
-		for word_data in all_words:
-			var word = word_data.word
-			var is_valid = dictionary_manager.is_valid_word(word)
-			
-			result.words.append({
-				"word": word,
-				"valid": is_valid
-			})
-			
-			if not is_valid:
-				result.errors.append("Mot invalide : " + word)
-	else:
-		# Pas de dictionnaire : accepter tous les mots
-		for word_data in all_words:
-			result.words.append({
-				"word": word_data.word,
-				"valid": true
-			})
+	# Calculer le score de chaque mot
+	var score_details = _calculate_score(temp_tiles)
+	var total_score = 0
 	
-	# 6. Le mouvement est valide si tous les mots le sont
-	result.valid = result.errors.is_empty()
+	# Pour chaque mot, combiner validation + score
+	for i in range(all_words_data.size()):
+		var word_data = all_words_data[i]
+		var word_text = word_data.word
+		
+		# Vérifier la validité du mot
+		var is_valid = true
+		if dictionary_manager and dictionary_manager.is_loaded:
+			is_valid = dictionary_manager.is_valid_word(word_text)
+		
+		# Trouver le score correspondant
+		var word_score = 0
+		for detail in score_details.details:
+			if detail.word == word_text:
+				word_score = detail.score
+				break
+		
+		# Ajouter au résultat
+		result.words.append({
+			"text": word_text,
+			"valid": is_valid,
+			"score": word_score
+		})
+		
+		# Accumuler le score si valide
+		if is_valid:
+			total_score += word_score
 	
-	# 7. Calculer le score (si valide)
-	if result.valid:
-		var score_data = _calculate_score(temp_tiles)
-		result.score = score_data.score
+	# Vérifier si tous les mots sont valides
+	var all_valid = true
+	for word_info in result.words:
+		if not word_info.valid:
+			all_valid = false
+			break
+	
+	# Bonus Scrabble
+	if all_valid and temp_tiles.size() == ScrabbleConfig.RACK_SIZE:
+		result.bonus_scrabble = 50
+		total_score += 50
+	
+	# Résultat final
+	result.valid = all_valid
+	result.total_score = total_score
 	
 	return result
 
@@ -329,8 +352,23 @@ func _extract_main_word(temp_tiles: Array) -> Dictionary:
 	
 	if temp_tiles.is_empty():
 		return {"word": "", "positions": [], "is_horizontal": true}
+	# ✅ CAS SPÉCIAL : Si on place UNE SEULE tuile
+	if temp_tiles.size() == 1:
+		var pos = temp_tiles[0]
+		
+		# Extraire dans les deux directions
+		var horizontal_word = _extract_word_at_position(pos, true)
+		var vertical_word = _extract_word_at_position(pos, false)
+		
+		print("MV dbg single tile: horizontal = ", horizontal_word.word, ", vertical = ", vertical_word.word)
+		
+		# Prendre le mot le plus long (ou horizontal si égalité)
+		if vertical_word.word.length() > horizontal_word.word.length():
+			return vertical_word
+		else:
+			return horizontal_word
 	
-	# Déterminer la direction
+	# Déterminer la direction (plusieurs tuiles)
 	var first_pos = temp_tiles[0]
 	var is_horizontal = true
 	for pos in temp_tiles:

@@ -33,10 +33,10 @@ function calculateWordScore(
         if (isNewTile) {
             const bonus = getBonus(board, boardPosition);
             switch (bonus) {
-                case "LETTER_X2":
+                case "DOUBLE_LETTER":
                     letterScore *= 2;
                     break;
-                case "LETTER_X3":
+                case "TRIPLE_LETTER":
                     letterScore *= 3;
                     break;
                 case "DOUBLE_WORD":

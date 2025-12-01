@@ -159,20 +159,21 @@ func _update_board(board_data: Array) -> void:
 				# Créer la représentation visuelle
 				var cell = board_manager.get_cell_at(Vector2i(x, y))
 				var tile_manager = scrabble_game.tile_manager
-				tile_manager.create_tile_visual(godot_tile, cell, board_manager.tile_size_board)
+				var tile_node = tile_manager.create_tile_visual(godot_tile, cell, board_manager.tile_size_board)
 				
+				# ✅ Si c'est un joker avec une lettre assignée, mettre à jour l'affichage
+				if godot_tile.is_joker and godot_tile.assigned_letter != null:
+					scrabble_game._update_joker_visual(tile_node, godot_tile.assigned_letter)
+
 				# Mettre à jour les données du plateau
 				board_manager.set_tile_at(Vector2i(x, y), godot_tile)
-				
+
 				# Marquer comme verrouillée si nécessaire
 				var is_locked = cell_data.get("isLocked", false)
 				if is_locked:
-					# Les tuiles verrouillées ne peuvent pas être déplacées
-					var tile_node = TileManager.get_tile_in_cell(cell)
-					if tile_node:
-						tile_node.set_meta("locked", true)
-						tile_node.modulate = Color(0.85, 0.85, 0.65)  # Légèrement plus sombre
-
+					tile_node.set_meta("locked", true)
+					tile_node.modulate = Color(0.85, 0.85, 0.65)  # Légèrement plus sombre
+					
 # ============================================================================
 # MISE À JOUR DU CHEVALET
 # ============================================================================
@@ -369,8 +370,26 @@ func _on_error_received(error_message: String) -> void:
 	
 	print("❌ Erreur du serveur : ", error_message)
 	
-	# TODO: Afficher un message à l'utilisateur
-	# Par exemple, si le coup est invalide, on peut remettre les tuiles dans le chevalet
+	# Afficher un message à l'utilisateur
+	_show_error_popup(error_message)
+	
+	# Remettre les tuiles temporaires au chevalet
+	if scrabble_game.has_method("_return_temp_tiles_to_rack"):
+		scrabble_game._return_temp_tiles_to_rack()
+	
+	# Réactiver les boutons pour que le joueur puisse rejouer
+	if scrabble_game.has_method("_on_my_turn_started"):
+		scrabble_game._on_my_turn_started()
+
+# ============================================================================
+# FONCTION : Afficher un popup d'erreur
+# ============================================================================
+func _show_error_popup(error_message: String) -> void:
+	"""Affiche un popup avec le message d'erreur du serveur"""
+	
+	# Appeler une fonction du ScrabbleGame
+	if scrabble_game.has_method("_show_server_error"):
+		scrabble_game._show_server_error(error_message)
 
 # ============================================================================
 # UTILITAIRES

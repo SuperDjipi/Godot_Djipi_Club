@@ -184,45 +184,51 @@ func _validate_current_move() -> void:
 	_show_validation_result(validation_result)
 
 # ============================================================================
-# FONCTION : Afficher le résultat de validation
+# FONCTION : Afficher le résultat de validation (version finale)
 # ============================================================================
 func _show_validation_result(result: Dictionary) -> void:
-	# Construire le message
+	"""Affiche les mots avec couleurs et scores"""
+	
 	var message = ""
 	
-	if result.valid:
-		message = "✅ Mouvement valide !\n"
-		message += "Score : %d points\n\n" % result.score
+	# Cas 1 : Erreur de règle (pas de mots à afficher)
+	if result.rule_error != "":
+		message = "[color=#e74c3c]✗ %s[/color]" % result.rule_error
+	
+	# Cas 2 : Mots formés
+	elif result.words.size() > 0:
+		for word_info in result.words:
+			if word_info.valid:
+				# Mot valide : vert avec score
+				message += "[color=#2ecc71]✓ %s[/color] [color=#95a5a6]%d pts[/color]\n" % [word_info.text, word_info.score]
+			else:
+				# Mot invalide : rouge sans score
+				message += "[color=#e74c3c]✗ %s[/color]\n" % word_info.text
 		
-		# Afficher les détails si disponibles
-		if result.has("details") and result.details.size() > 0:
-			message += "Détails :\n"
-			for detail in result.details:
-				message += "• %s : %d pts\n" % [detail.word, detail.score]
+		# Bonus Scrabble
+		if result.bonus_scrabble > 0:
+			message += "[color=#f39c12]★ BONUS[/color] [color=#95a5a6]+50 pts[/color]\n"
+		
+		# Score total si valide
+		if result.valid and result.total_score > 0:
+			message += "[color=#bdc3c7]―――――――――[/color]\n"
+			message += "[color=#27ae60][b]%d points[/b][/color]" % result.total_score
+	
+	# Cas 3 : Aucun mot (ne devrait pas arriver)
 	else:
-		message = "❌ Mouvement invalide :\n"
-		message += "\n".join(result.errors)
+		message = "[color=#e74c3c]✗ Aucun mot formé[/color]"
 	
+	# Afficher
 	validation_label.text = message
-	# validation_label.text = move_validator.get_validation_message(result)
+	validation_label.modulate = Color(1.0, 1.0, 1.0, 1.0)
 	
+	# Gestion des boutons
 	if result.valid:
-		validation_label.modulate = Color(0.2, 1.0, 0.2)  # Vert
-		# Activer le bouton "Jouer" dès que le mouvement est valide et que l'on peut jouer
-		if game_state_sync and game_state_sync.is_my_turn:
-			play_button.disabled = false
-		else:
-			play_button.disabled = true  # Pas notre tour !
+		play_button.disabled = not (game_state_sync and game_state_sync.is_my_turn)
 		undo_button.disabled = false
 	else:
-		validation_label.modulate = Color(1.0, 0.3, 0.3)  # Rouge
-		# Désactiver le bouton "Jouer" si le mouvement est invalide
 		play_button.disabled = true
 		undo_button.disabled = false
-	
-	# Animer l'apparition
-	var tween = validation_label.create_tween()
-	tween.tween_property(validation_label, "modulate:a", 1.0, 0.3)
 
 # ============================================================================
 # FONCTION : Cacher l'UI de validation
@@ -587,13 +593,18 @@ func _show_waiting_message() -> void:
 # ============================================================================
 func _show_end_game_popup(winner_name: String) -> void:
 	"""Affiche un popup avec les résultats de la partie"""
+		# Chercher le CanvasLayer parent
+	var canvas_layer = get_node_or_null("CanvasLayer")
 	
+	if not canvas_layer:
+		print("❌ ERREUR : CanvasLayer introuvable !")
+		return
 	# Créer un fond semi-transparent
 	var overlay = ColorRect.new()
 	overlay.color = Color(0, 0, 0, 0.7)
 	overlay.size = viewport_size
 	overlay.position = Vector2.ZERO
-	add_child(overlay)
+	canvas_layer.add_child(overlay)
 	
 	# Créer le panel principal
 	var panel = Panel.new()
@@ -830,15 +841,84 @@ func _update_joker_visual(tile_node: Panel, assigned_letter: String) -> void:
 		letter_lbl.text = assigned_letter
 		
 		# Ajouter un petit "?" en coin pour indiquer que c'est un joker
-		var joker_indicator = tile_node.get_node_or_null("JokerIndicator")
-		if not joker_indicator:
-			joker_indicator = Label.new()
-			joker_indicator.name = "JokerIndicator"
-			joker_indicator.text = "?"
-			joker_indicator.add_theme_font_size_override("font_size", int(board_manager.tile_size_board * 0.2))
-			joker_indicator.position = Vector2(board_manager.tile_size_board * 0.05, board_manager.tile_size_board * 0.7)
-			joker_indicator.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
-			tile_node.add_child(joker_indicator)
+		#var joker_indicator = tile_node.get_node_or_null("JokerIndicator")
+		#if not joker_indicator:
+			#joker_indicator = Label.new()
+			#joker_indicator.name = "JokerIndicator"
+			#joker_indicator.text = "?"
+			#joker_indicator.add_theme_font_size_override("font_size", int(board_manager.tile_size_board * 0.2))
+			#joker_indicator.position = Vector2(board_manager.tile_size_board * 0.05, board_manager.tile_size_board * 0.7)
+			#joker_indicator.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+			#tile_node.add_child(joker_indicator)
+
+# ============================================================================
+# FONCTION : Afficher une erreur serveur
+# ============================================================================
+func _show_server_error(error_message: String) -> void:
+	"""Affiche un popup avec l'erreur du serveur"""
+	
+	print("🚨 Affichage erreur serveur : ", error_message)
+	
+	# Utiliser le même système que le popup de fin de partie
+	var canvas_layer = get_node_or_null("CanvasLayer")
+	if not canvas_layer:
+		return
+	
+	# Créer un fond semi-transparent
+	var overlay = ColorRect.new()
+	overlay.name = "ErrorOverlay"
+	overlay.color = Color(0, 0, 0, 0.7)
+	overlay.size = viewport_size
+	overlay.position = Vector2.ZERO
+	canvas_layer.add_child(overlay)
+	
+	# Créer le panel principal
+	var panel = Panel.new()
+	panel.custom_minimum_size = Vector2(400, 200)
+	panel.position = (viewport_size - panel.custom_minimum_size) / 2
+	overlay.add_child(panel)
+	
+	# Conteneur vertical
+	var vbox = VBoxContainer.new()
+	vbox.position = Vector2(20, 20)
+	vbox.size = panel.size - Vector2(40, 40)
+	vbox.add_theme_constant_override("separation", 10)
+	panel.add_child(vbox)
+	
+	# Titre
+	var title = Label.new()
+	title.text = "❌ Erreur"
+	title.add_theme_font_size_override("font_size", 24)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_color_override("font_color", Color(1.0, 0.3, 0.3))
+	vbox.add_child(title)
+	
+	# Message d'erreur
+	var message = Label.new()
+	message.text = error_message
+	message.add_theme_font_size_override("font_size", 16)
+	message.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	message.custom_minimum_size = Vector2(360, 0)
+	vbox.add_child(message)
+	
+	# Spacer
+	var spacer = Control.new()
+	spacer.custom_minimum_size = Vector2(0, 20)
+	vbox.add_child(spacer)
+	
+	# Bouton OK
+	var ok_button = Button.new()
+	ok_button.text = "OK"
+	ok_button.custom_minimum_size = Vector2(150, 40)
+	ok_button.pressed.connect(func():
+		overlay.queue_free()
+	)
+	
+	# Centrer le bouton
+	var button_center = CenterContainer.new()
+	button_center.add_child(ok_button)
+	vbox.add_child(button_center)
 
 # ============================================================================
 # FONCTIONS D'ANIMATION

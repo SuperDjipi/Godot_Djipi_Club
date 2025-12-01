@@ -112,8 +112,11 @@ func _start_drag_from_rack(tile_node: Panel, index: int, parent: Node2D) -> void
 		tile_tween.tween_property(letter_lbl, "position", Vector2(board_manager.tile_size_board * 0.2, board_manager.tile_size_board * 0.05), 0.2)
 		tile_tween.tween_property(value_lbl, "position", Vector2(board_manager.tile_size_board * 0.6, board_manager.tile_size_board * 0.55), 0.2)
 	
-	tile_node.reparent(parent)
-	tile_node.z_index = 100
+	# ✅ Reparenter dans le CanvasLayer
+	var drag_parent = _get_canvas_layer_for_drag(parent)
+	tile_node.reparent(drag_parent)
+	print("DnD dbg : start rack parent : ", parent)
+	tile_node.z_index = 1000
 
 # ============================================================================
 # FONCTION PRIVÉE : Démarrer le drag depuis le plateau
@@ -124,8 +127,11 @@ func _start_drag_from_board(tile_node: Panel, pos: Vector2i, parent: Node2D) -> 
 	board_manager.set_tile_at(pos, null)
 	temp_tiles.erase(pos)
 	
-	tile_node.reparent(parent)
-	tile_node.z_index = 100
+	# ✅ Reparenter dans le CanvasLayer
+	var drag_parent = _get_canvas_layer_for_drag(parent)
+	tile_node.reparent(drag_parent)
+	print("DnD dbg : start board parent : ", parent)
+	tile_node.z_index = 1000
 
 # ============================================================================
 # FONCTION : Mettre à jour le drag
@@ -192,6 +198,7 @@ func _try_drop_on_rack(pos: Vector2) -> bool:
 			tile_data.assigned_letter = null
 			# Appeler la fonction du ScrabbleGame
 			var game = get_parent()
+			print("DnD dbg : try_drop rack parent : ", game)
 			if game.has_method("_reset_joker_visual"):
 				game._reset_joker_visual(dragging_tile)
 		
@@ -418,6 +425,7 @@ func _try_drop_on_board(pos: Vector2) -> bool:
 		if tile_data.is_joker and tile_data.assigned_letter == null:
 			# Appeler le popup via le ScrabbleGame
 			var game = get_parent()
+			print("DnD dbg : try_drop board parent : ", game)
 			if game.has_method("_create_joker_letter_popup"):
 				game._create_joker_letter_popup(board_pos, dragging_tile)
 	
@@ -467,3 +475,15 @@ func get_temp_tiles() -> Array:
 # ============================================================================
 func is_dragging() -> bool:
 	return dragging_tile != null or board_manager.is_dragging_board
+
+# ============================================================================
+# FONCTION PRIVÉE : Obtenir le CanvasLayer pour le drag
+# ============================================================================
+func _get_canvas_layer_for_drag(game_node: Node2D) -> Node:
+	"""Récupère le CanvasLayer pour afficher les tuiles en drag au-dessus de tout"""
+	var canvas_layer = game_node.get_node_or_null("CanvasLayer")
+	if canvas_layer:
+		return canvas_layer
+	else:
+		print("⚠️ CanvasLayer introuvable, utilisation du parent par défaut")
+		return game_node

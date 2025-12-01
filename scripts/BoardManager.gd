@@ -113,13 +113,30 @@ func _create_board_cell(pos: Vector2i) -> Panel:
 	
 	# Appliquer la couleur du bonus
 	var bonus = bonus_map.get(pos, "")
-	cell.modulate = ScrabbleConfig.get_bonus_color(bonus)
+	var color = ScrabbleConfig.get_bonus_color(bonus)
 	
+	# Créer un StyleBoxFlat pour avoir une vraie couleur de fond
+	var style = StyleBoxFlat.new()
+	style.bg_color = color
+	style.border_width_left = 1
+	style.border_width_right = 1
+	style.border_width_top = 1
+	style.border_width_bottom = 1
+	style.border_color = Color(0.5, 0.5, 0.4)  # Bordure gris-brun
+	
+	cell.add_theme_stylebox_override("panel", style)
 	# Ajouter un label pour les bonus (sauf CENTER)
-	if bonus and bonus != "CENTER":
+	if bonus:
 		var lbl = Label.new()
-		lbl.text = bonus
-		lbl.add_theme_font_size_override("font_size", 10)
+		if bonus == "CENTER":
+			lbl.text = "★"  # Étoile
+			lbl.add_theme_font_size_override("font_size", 20)
+			lbl.add_theme_color_override("font_color", Color(0.8, 0.6, 0.8))
+		else:
+			lbl.text = bonus
+			lbl.add_theme_font_size_override("font_size", 10)
+			lbl.add_theme_color_override("font_color", Color(0.3, 0.3, 0.3))
+	
 		lbl.position = Vector2(5, 10)
 		cell.add_child(lbl)
 	
