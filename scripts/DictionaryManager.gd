@@ -34,66 +34,63 @@ const DICT_FILES = {
 # FONCTION : Choix de la plateforme
 # ============================================================================
 func _get_platform_path() -> String:
-	match OS.get_name():
-		"Android":
-			return "user://dictionaries/"  # Chemin persistant Android
-		"Web":
-			return "res://assets/dictionaries/"  # Intégré dans l'export web
-		_:
-			return "res://assets/dictionaries/"  # PC/Mac/Linux
+	return "res://assets/dictionaries/"
+	#match OS.get_name():
+		#"Android":
+			#return "user://dictionaries/"  # Chemin persistant Android
+		#"Web":
+			#return "res://assets/dictionaries/"  # Intégré dans l'export web
+		#_:
+			#return "res://assets/dictionaries/"  # PC/Mac/Linux
 # ============================================================================
 # FONCTION : Charger tous les dictionnaires
 # ============================================================================
 func load_dictionaries() -> bool:
-	print("📖 Chargement des dictionnaires...")
+	DebugConsole.debug("📖 Chargement des dictionnaires...")
 	
 	var base_path = _get_platform_path()
+	DebugConsole.log("   Chemin : [color=cyan]" + base_path + "[/color]")
 	
 	for length in DICT_FILES:
 		var filename = DICT_FILES[length]
 		var path = base_path + filename
 		
 		if not _load_dictionary_file(path, length):
-			print("❌ Erreur lors du chargement de ", filename)
+			DebugConsole.debug("[color=red]❌ Erreur : " + filename + "[/color]")
 			return false
 	
 	is_loaded = true
-	print("✅ Dictionnaires chargés avec succès")
+	DebugConsole.debug("[color=green]✅ Dictionnaires chargés avec succès[/color]")
 	return true
 
 # ============================================================================
 # FONCTION PRIVÉE : Charger un fichier dictionnaire
 # ============================================================================
+
 func _load_dictionary_file(path: String, length: int) -> bool:
-	# Vérifier si le fichier existe
 	if not FileAccess.file_exists(path):
-		print("⚠️ Fichier non trouvé : ", path)
+		DebugConsole.debug("[color=red]⚠️ Fichier non trouvé : " + path + "[/color]")
 		return false
 	
-	# Ouvrir le fichier
 	var file = FileAccess.open(path, FileAccess.READ)
 	if file == null:
-		print("❌ Impossible d'ouvrir : ", path)
+		DebugConsole.debug("[color=red]❌ Impossible d'ouvrir : " + path + "[/color]")
 		return false
 	
-	# Créer un dictionnaire (HashSet) pour cette longueur
 	dictionaries[length] = {}
-	
-	# Lire tout le contenu
 	var content = file.get_as_text()
 	file.close()
 	
-	# Séparer par virgules et nettoyer
 	var words = content.split(",")
 	var word_count = 0
 	
 	for word in words:
 		var cleaned_word = word.strip_edges().to_upper()
 		if cleaned_word.length() > 0:
-			dictionaries[length][cleaned_word] = true  # HashSet
+			dictionaries[length][cleaned_word] = true
 			word_count += 1
 	
-	print("  ✓ ", path.get_file(), " : ", word_count, " mots")
+	DebugConsole.debug("  ✓ [color=green]" + path.get_file() + " : " + str(word_count) + " mots[/color]")
 	return true
 
 # ============================================================================

@@ -96,3 +96,96 @@ func get_bonus_color(bonus: String) -> Color:
 		"L2": return COLOR_LETTER_DOUBLE
 		"CENTER": return COLOR_CENTER
 		_: return COLOR_NORMAL
+# ============================================================================
+# DICTIONNAIRE (chargé au démarrage)
+# ============================================================================
+
+var dictionaries: Dictionary = {}  # {2: {...}, 3: {...}, ..., 15: {...}}
+var is_dictionary_loaded: bool = false
+
+const DICT_FILES = {
+	2: "deux.txt",
+	3: "trois.txt",
+	4: "quatre.txt",
+	5: "cinq.txt",
+	6: "six.txt",
+	7: "sept.txt",
+	8: "huit.txt",
+	9: "neuf.txt",
+	10: "dix.txt",
+	11: "onze.txt",
+	12: "douze.txt",
+	13: "treize.txt",
+	14: "quatorze.txt",
+	15: "quinze.txt"
+}
+
+# ============================================================================
+# FONCTION : Initialisation (appelée automatiquement par Godot)
+# ============================================================================
+func _ready():
+	DebugConsole.debug("📖 ScrabbleConfig : Chargement des dictionnaires...")
+	load_dictionaries()
+
+# ============================================================================
+# FONCTION : Charger les dictionnaires
+# ============================================================================
+func load_dictionaries() -> bool:
+	var base_path = "res://assets/dictionaries/"
+	
+	for length in DICT_FILES:
+		var filename = DICT_FILES[length]
+		var path = base_path + filename
+		
+		if not _load_dictionary_file(path, length):
+			DebugConsole.debug("[color=red]❌ Erreur : " + filename + "[/color]")
+			return false
+	
+	is_dictionary_loaded = true
+	DebugConsole.debug("[color=green]✅ Dictionnaires chargés[/color]")
+	return true
+
+func _load_dictionary_file(path: String, length: int) -> bool:
+	if not FileAccess.file_exists(path):
+		DebugConsole.debug("[color=red]⚠️ Non trouvé : " + path + "[/color]")
+		return false
+	
+	var file = FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		DebugConsole.debug("[color=red]❌ Ouverture impossible : " + path + "[/color]")
+		return false
+	
+	dictionaries[length] = {}
+	var content = file.get_as_text()
+	file.close()
+	
+	var words = content.split(",")
+	var word_count = 0
+	
+	for word in words:
+		var cleaned_word = word.strip_edges().to_upper()
+		if cleaned_word.length() > 0:
+			dictionaries[length][cleaned_word] = true
+			word_count += 1
+	
+	DebugConsole.debug("  ✓ " + path.get_file() + " : " + str(word_count) + " mots")
+	return true
+
+# ============================================================================
+# FONCTION : Vérifier si un mot existe
+# ============================================================================
+func is_valid_word(word: String) -> bool:
+	if not is_dictionary_loaded:
+		DebugConsole.debug("[color=yellow]⚠️ Dictionnaires non chargés[/color]")
+		return false
+	
+	var normalized_word = word.to_upper().strip_edges()
+	var length = normalized_word.length()
+	
+	if length < 2 or length > 15:
+		return false
+	
+	if not dictionaries.has(length):
+		return false
+	
+	return dictionaries[length].has(normalized_word)

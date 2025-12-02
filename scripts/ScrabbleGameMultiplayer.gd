@@ -13,7 +13,6 @@ var rack_manager: RackManager
 var drag_drop_controller: DragDropController
 var game_state_sync: GameStateSync
 var move_validator: MoveValidator
-var dictionary_manager: DictionaryManager
 
 # --- RÉFÉRENCES RÉSEAU ---
 @onready var network_manager = $"/root/NetworkManager"
@@ -65,22 +64,10 @@ func _ready():
 	# On crée le chevalet dans le conteneur de la scène
 	rack_manager.create_rack(rack_container)
 	
-	# Créer et charger le dictionnaire
-	dictionary_manager = DictionaryManager.new()
-	add_child(dictionary_manager)
-	
-	if not dictionary_manager.load_dictionaries():
-		print("❌ ERREUR : Impossible de charger les dictionnaires !")
-		# Décider quoi faire : continuer sans validation ou bloquer ?
-		# Pour l'instant, on continue
-	else:
-		var stats = dictionary_manager.get_stats()
-		print("📊 Dictionnaire : ", stats.total, " mots chargés")
-	
 	# 4. Créer et initialiser le MoveValidator
 	move_validator = MoveValidator.new()
 	add_child(move_validator)
-	move_validator.initialize(board_manager, dictionary_manager)
+	move_validator.initialize(board_manager)
 	
 	# 5. Créer et initialiser le DragDropController
 	drag_drop_controller = DragDropController.new()
@@ -528,9 +515,11 @@ func _create_player_card_horizontal(score_data: Dictionary, all_scores: Array) -
 	name_label.text = score_data.name
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_label.add_theme_font_size_override("font_size", 14)
+	name_label.add_theme_color_override("font_color", Color(0.2, 0.2, 0.8))
 	
 	# Mettre en couleur si c'est nous
 	if score_data.is_me:
+		name_label.text = "Moi"
 		name_label.add_theme_color_override("font_color", Color(0.2, 0.2, 0.8))
 	
 	vbox.add_child(name_label)
@@ -585,7 +574,7 @@ func _show_waiting_message() -> void:
 	score_board_container.add_child(center)
 	
 	var label = Label.new()
-	label.text = "⏳ En attente des joueurs..."
+	label.text = "⏳ Chargement ..."
 	label.add_theme_font_size_override("font_size", 18)
 	center.add_child(label)
 # ============================================================================
@@ -673,7 +662,7 @@ func _show_end_game_popup(winner_name: String) -> void:
 func _on_back_to_menu() -> void:
 	"""Retour au menu principal"""
 	network_manager.disconnect_from_server()
-	get_tree().change_scene_to_file("res://login.tscn")
+	get_tree().change_scene_to_file("res://scenes/login.tscn")
 
 # ============================================================================
 # FONCTION : Créer le popup de sélection de lettre pour joker

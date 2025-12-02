@@ -250,67 +250,75 @@ async function startServer() {
     });
     // --- FIN DE L'API D'INSCRIPTION ---
 
-/**
- * Route API pour la connexion d'un joueur existant.
- * Attend une requête GET sur /api/login?name=PSEUDO
- */
-app.get('/api/login', async (req, res) => {
-    const name = req.query.name as string;
-    
-    if (!name) {
-        return res.status(400).send({ message: "Le pseudo est requis." });
-    }
+    /**
+     * Route API pour la connexion d'un joueur existant.
+     * Attend une requête GET sur /api/login?name=PSEUDO
+     */
+    app.get('/api/login', async (req, res) => {
+        const name = req.query.name as string;
 
-    try {
-        // Chercher le joueur dans la base de données
-        const user = await db.get('SELECT * FROM users WHERE LOWER(name) = ?', name.toLowerCase());
-        
-        if (!user) {
-            return res.status(404).send({ message: "Joueur non trouvé. Veuillez vous inscrire." });
+        if (!name) {
+            return res.status(400).send({ message: "Le pseudo est requis." });
         }
 
-        console.log(`✅ Connexion réussie pour : ${user.name}`);
-        res.status(200).send({ 
-            message: `Bienvenue à nouveau, ${user.name} !`, 
-            playerId: user.id,
-            name: user.name
-        });
+        try {
+            // Chercher le joueur dans la base de données
+            const user = await db.get('SELECT * FROM users WHERE LOWER(name) = ?', name.toLowerCase());
 
-    } catch (error) {
-        console.error("Erreur lors de la connexion:", error);
-        res.status(500).send({ message: "Erreur interne du serveur." });
-    }
-});
+            if (!user) {
+                return res.status(404).send({ message: "Joueur non trouvé. Veuillez vous inscrire." });
+            }
 
-/**
- * Route API pour récupérer la liste des parties en cours pour un joueur spécifique.
- */
-app.get('/api/players/:playerId/games', (req, res) => {
-    const { playerId } = req.params;
+            console.log(`✅ Connexion réussie pour : ${user.name}`);
+            res.status(200).send({
+                message: `Bienvenue à nouveau, ${user.name} !`,
+                playerId: user.id,
+                name: user.name
+            });
 
-    if (!playerId) {
-        return res.status(400).send({ message: "L'ID du joueur est requis." });
-    }
+        } catch (error) {
+            console.error("Erreur lors de la connexion:", error);
+            res.status(500).send({ message: "Erreur interne du serveur." });
+        }
+    });
 
-    // On parcourt toutes les parties en mémoire.
-    const activeGamesForPlayer = Array.from(games.values())
-        .filter(game => game.players.some(p => p.id === playerId)) // On ne garde que les parties où le joueur est présent
-        .filter(game => game.status !== GameStatus.FINISHED) // On exclut les parties terminées
-        .map(game => {
-            // On ne renvoie que les informations publiques, jamais les chevalets ou la pioche.
-            return {
-                gameId: game.id,
-                players: game.players.map(p => p.name),
-                currentPlayerId: game.players[game.currentPlayerIndex]?.id,
-                status: game.status,
-                turnNumber: game.turnNumber
-            };
-        });
+    /**
+     * Route API pour récupérer la liste des parties en cours pour un joueur spécifique.
+     */
+    app.get('/api/players/:playerId/games', (req, res) => {
+        const { playerId } = req.params;
 
-    console.log(`🔎 Requête pour les parties de ${playerId}. ${activeGamesForPlayer.length} partie(s) trouvée(s).`);
+        if (!playerId) {
+            return res.status(400).send({ message: "L'ID du joueur est requis." });
+        }
 
-    res.status(200).json(activeGamesForPlayer);
-});
+        // On parcourt toutes les parties en mémoire.
+        const activeGamesForPlayer = Array.from(games.values())
+            .filter(game => game.players.some(p => p.id === playerId)) // On ne garde que les parties où le joueur est présent
+            .filter(game => game.status !== GameStatus.FINISHED) // On exclut les parties terminées
+            .map(game => {
+                // Pour chaque partie, on identifie les adversaires
+                const opponents = game.players
+                    .filter(p => p.id !== playerId) // On exclut le joueur lui-même
+                    .map(p => p.name); // On ne garde que leur nom
+
+                const currentPlayer = game.players[game.currentPlayerIndex];
+
+                // On construit un objet propre et utile pour l'UI du client
+                return {
+                    gameId: game.id, // L'UUID, essentiel pour se reconnecter
+                    opponents: opponents.length > 0 ? opponents : ["En attente..."], // Liste des noms des adversaires
+                    isMyTurn: currentPlayer?.id === playerId, // Est-ce mon tour ?
+                    status: game.status,
+                    myScore: game.players.find(p => p.id === playerId)?.score || 0,
+                    opponentScore: game.players.find(p => p.id !== playerId)?.score || 0 // Simplifié pour 2 joueurs
+                };
+            });
+
+        console.log(`🔎 Requête pour les parties de ${playerId}. ${activeGamesForPlayer.length} partie(s) trouvée(s).`);
+
+        res.status(200).json(activeGamesForPlayer);
+    });
 
     /**
      * Route API pour permettre à un joueur de rejoindre une partie existante.
@@ -326,7 +334,7 @@ app.get('/api/players/:playerId/games', (req, res) => {
             return res.status(400).send({ message: "L'ID du joueur est requis." });
         }
 
-        const game = games.get(gameId.toUpperCase());
+        const game = games.get(gameId);
 
         // 1. Vérifications de base
         if (!game) {
@@ -360,21 +368,21 @@ app.get('/api/players/:playerId/games', (req, res) => {
             const updatedGame = { ...game, players: updatedPlayers };
 
             // 4. Mettre à jour l'état de la partie en mémoire
-            games.set(gameId.toUpperCase(), updatedGame);
+            games.set(gameId, updatedGame);
 
-            console.log(`✅ Le joueur ${userProfile.name} a rejoint la partie ${gameId.toUpperCase()}`);
+            console.log(`✅ Le joueur ${userProfile.name} a rejoint la partie ${gameId}`);
 
             // 5. NOTIFIER TOUT LE MONDE en temps réel !
-            broadcastGameState(gameId.toUpperCase(), updatedGame);
+            broadcastGameState(gameId, updatedGame);
 
             // 6. NOUVEAU : DÉMARRER AUTOMATIQUEMENT SI 2 JOUEURS OU PLUS
             const minPlayers = 2; // Nombre minimum de joueurs pour démarrer
             if (updatedGame.players.length >= minPlayers) {
-                console.log(`🎮 Démarrage automatique de la partie ${gameId.toUpperCase()} (${updatedGame.players.length} joueurs)`);
-                
+                console.log(`🎮 Démarrage automatique de la partie ${gameId} (${updatedGame.players.length} joueurs)`);
+
                 // Attendre un court instant pour que tous les clients soient connectés
                 setTimeout(() => {
-                    const currentGame = games.get(gameId.toUpperCase());
+                    const currentGame = games.get(gameId);
                     if (!currentGame || currentGame.status !== GameStatus.WAITING_FOR_PLAYERS) {
                         return; // La partie a déjà été démarrée ou n'existe plus
                     }
@@ -401,10 +409,10 @@ app.get('/api/players/:playerId/games', (req, res) => {
                     };
 
                     // 4. Sauvegarder et diffuser le nouvel état
-                    games.set(gameId.toUpperCase(), startedGame);
-                    broadcastGameState(gameId.toUpperCase(), startedGame);
-                    
-                    console.log(`✅ Partie ${gameId.toUpperCase()} démarrée automatiquement avec ${startedGame.players.length} joueurs`);
+                    games.set(gameId, startedGame);
+                    broadcastGameState(gameId, startedGame);
+
+                    console.log(`✅ Partie ${gameId} démarrée automatiquement avec ${startedGame.players.length} joueurs`);
                 }, 1000); // Délai de 1 seconde pour laisser le temps aux WebSockets de se connecter
             }
 
@@ -418,91 +426,84 @@ app.get('/api/players/:playerId/games', (req, res) => {
         }
     });
 
-// Dans src/index.ts, après la route app.post('/api/games/:gameId/join', ...);
+    /**
+     * Route API pour permettre à un joueur de se "reconnecter" à une partie déjà en cours.
+     * Cette route est cruciale pour reprendre une partie après avoir fermé/rouvert l'application
+     * ou pour rejoindre une partie de test déjà démarrée.
+     * Attend une requête POST sur /api/games/:gameId/reconnect
+     * @param gameId L'ID de la partie à rejoindre (dans l'URL).
+     * @body { "playerId": "xxxx-yyyy-zzzz" }
+     */
+    app.post('/api/games/:gameId/reconnect', (req, res) => {
+        const { gameId } = req.params;
+        const { playerId } = req.body;
 
-/**
- * Route API pour permettre à un joueur de se "reconnecter" à une partie déjà en cours.
- * Cette route est cruciale pour reprendre une partie après avoir fermé/rouvert l'application
- * ou pour rejoindre une partie de test déjà démarrée.
- * Attend une requête POST sur /api/games/:gameId/reconnect
- * @param gameId L'ID de la partie à rejoindre (dans l'URL).
- * @body { "playerId": "xxxx-yyyy-zzzz" }
- */
-app.post('/api/games/:gameId/reconnect', (req, res) => {
-    const { gameId } = req.params;
-    const { playerId } = req.body;
+        if (!playerId) {
+            return res.status(400).send({ message: "L'ID du joueur est requis." });
+        }
 
-    if (!playerId) {
-        return res.status(400).send({ message: "L'ID du joueur est requis." });
-    }
+        const game = games.get(gameId.toUpperCase());
 
-    const game = games.get(gameId.toUpperCase());
+        // 1. La partie doit exister
+        if (!game) {
+            return res.status(404).send({ message: "Partie non trouvée." });
+        }
 
-    // 1. La partie doit exister
-    if (!game) {
-        return res.status(404).send({ message: "Partie non trouvée." });
-    }
+        // 2. Le joueur doit faire partie de cette partie
+        const isPlayerInGame = game.players.some(p => p.id === playerId);
+        if (!isPlayerInGame) {
+            return res.status(403).send({ message: "Vous ne faites pas partie de cette partie." });
+        }
 
-    // 2. Le joueur doit faire partie de cette partie
-    const isPlayerInGame = game.players.some(p => p.id === playerId);
-    if (!isPlayerInGame) {
-        return res.status(403).send({ message: "Vous ne faites pas partie de cette partie." });
-    }
+        // 3. La partie doit être en cours (ou terminée, on peut vouloir voir le score final)
+        if (game.status === GameStatus.WAITING_FOR_PLAYERS) {
+            return res.status(403).send({ message: "Cette partie n'a pas encore commencé. Utilisez l'API de 'join'." });
+        }
 
-    // 3. La partie doit être en cours (ou terminée, on peut vouloir voir le score final)
-    if (game.status === GameStatus.WAITING_FOR_PLAYERS) {
-         return res.status(403).send({ message: "Cette partie n'a pas encore commencé. Utilisez l'API de 'join'." });
-    }
-
-    // Si toutes les conditions sont remplies, on autorise la reconnexion.
-    console.log(`✅ Autorisation de reconnexion pour le joueur ${playerId} à la partie ${game.id}`);
-    res.status(200).send({
-        message: "Reconnexion autorisée. Établissement de la connexion WebSocket...",
-        gameId: game.id,
+        // Si toutes les conditions sont remplies, on autorise la reconnexion.
+        console.log(`✅ Autorisation de reconnexion pour le joueur ${playerId} à la partie ${game.id}`);
+        res.status(200).send({
+            message: "Reconnexion autorisée. Établissement de la connexion WebSocket...",
+            gameId: game.id,
+        });
     });
-});
 
     // --- DÉBUT DE L'API DE CRÉATION DE PARTIE ---
     /**
      * Route API pour créer une nouvelle partie.
-     * Attend une requête POST sur /api/games.
-     * Le corps de la requête doit contenir l'ID du joueur qui crée la partie.
-     * @body { "creatorId": "xxxx-yyyy-zzzz" }
      */
     app.post('/api/games', async (req, res) => {
-        const { creatorId } = req.body;
+        const { playerId } = req.body;
 
-        if (!creatorId) {
-            return res.status(400).send({ message: "L'ID du créateur est requis." });
+        if (!playerId) {
+            return res.status(400).send({ message: "L'ID du joueur est requis." });
         }
+
         try {
-            // 1. Générer un code de partie simple et unique
-            const gameId = generateGameCode();
-
-            // 2. Récupérer le VRAI profil du créateur depuis la base de données
-            const creatorProfile = await db.get<UserProfile>('SELECT * FROM users WHERE id = ?', creatorId);
-            if (!creatorProfile) {
-                return res.status(404).send({ message: "Profil du créateur non trouvé." });
+            const userProfile = await db.get('SELECT * FROM users WHERE id = ?', playerId);
+            if (!userProfile) {
+                return res.status(404).send({ message: "Profil joueur non trouvé." });
             }
+            // Générer un code de partie simple et unique
+            const gameId = generateUUID();
+            const hostPlayer: Player = {
+                id: userProfile.id,
+                name: userProfile.name,
+                score: 0,
+                rack: [],
+                isActive: false,
+            };
 
-            // 3. Créer le nouvel état de la partie
+            // Créer le nouvel état de la partie
             const newGame: GameState = {
                 id: gameId,
-                hostId: creatorId,
+                hostId: hostPlayer.id,
                 board: createEmptyBoard(),
-                players: [
-                    {
-                        id: creatorProfile.id,
-                        name: creatorProfile.name,
-                        score: 0,
-                        rack: [], // Le chevalet sera rempli plus tard, au démarrage
-                        isActive: true
-                    }
-                ],
+                players: [hostPlayer],
                 tileBag: createTileBag(),
                 status: GameStatus.WAITING_FOR_PLAYERS,
                 moves: [],
-                turnNumber: 1,
+                turnNumber: 0,
                 currentPlayerIndex: 0,
             };
 
@@ -510,28 +511,100 @@ app.post('/api/games/:gameId/reconnect', (req, res) => {
             games.set(gameId, newGame);
             initGameConnections(gameId); // On prépare le "salon" WebSocket pour cette partie
 
-            console.log(`✅ Nouvelle partie créée par ${creatorProfile.name}. Code: ${gameId}`);
+            console.log(`✅ Nouvelle partie créée par ${userProfile.name}. Code: ${gameId}`);
 
             // 5. Renvoyer une réponse de succès au client
-            res.status(201).send({
-                message: "Partie créée avec succès !",
-                gameId: gameId
-            });
+            res.status(201).send(newGame);
         } catch (error) {
             console.error("Erreur lors de la création de la partie:", error);
             res.status(500).send({ message: "Erreur interne du serveur." });
         }
     });
 
-    // --- FIN DE L'API DE CRÉATION DE PARTIE ---
+    /**
+ * Route API pour récupérer la liste de tous les joueurs
+ */
+    app.get('/api/players', async (req, res) => {
+        try {
+            // Récupérer tous les joueurs de la base de données
+            const players = await db.all('SELECT id, name FROM users ORDER BY name');
 
+            console.log(`🔎 Requête pour la liste des joueurs. ${players.length} joueur(s) trouvé(s).`);
+
+            res.status(200).json(players);
+        } catch (error) {
+            console.error("Erreur lors de la récupération des joueurs:", error);
+            res.status(500).send({ message: "Erreur interne du serveur." });
+        }
+    });
+
+    /**
+     * Route API pour défier un joueur (créer une partie et l'inviter)
+     */
+    app.post('/api/challenge/:opponentId', async (req, res) => {
+        const { opponentId } = req.params;
+        const { playerId } = req.body;  // L'ID de celui qui lance le défi
+
+        if (!playerId) {
+            return res.status(400).send({ message: "L'ID du joueur est requis." });
+        }
+
+        try {
+            // Vérifier que les deux joueurs existent
+            const challenger = await db.get('SELECT * FROM users WHERE id = ?', playerId);
+            const opponent = await db.get('SELECT * FROM users WHERE id = ?', opponentId);
+
+            if (!challenger || !opponent) {
+                return res.status(404).send({ message: "Joueur introuvable." });
+            }
+
+            // Créer une nouvelle partie (même logique que /api/games)
+            const gameId = generateGameCode();
+
+            const newPlayer: Player = {
+                id: playerId,
+                name: challenger.name,
+                score: 0,
+                rack: [],
+                isActive: true,
+            };
+
+            const newGame: GameState = {
+                id: gameId,
+                hostId: playerId,
+                board: createEmptyBoard(),
+                players: [newPlayer],
+                tileBag: createTileBag(),
+                status: GameStatus.WAITING_FOR_PLAYERS,
+                moves: [],
+                turnNumber: 0,
+                currentPlayerIndex: 0,
+            };
+
+            games.set(gameId, newGame);
+            initGameConnections(gameId);
+
+            console.log(`✅ Partie créée par défi : ${gameId} (${challenger.name} vs ${opponent.name})`);
+
+            // TODO: Envoyer une notification à l'adversaire (WebSocket, push notification, etc.)
+
+            res.status(201).json({
+                message: `Défi envoyé à ${opponent.name} !`,
+                gameId: gameId
+            });
+
+        } catch (error) {
+            console.error("Erreur lors de la création du défi:", error);
+            res.status(500).send({ message: "Erreur interne du serveur." });
+        }
+    });
 
     // --- LOGIQUE PRINCIPALE DE CONNEXION ---
 
     /**
      * Ce bloc est exécuté à chaque fois qu'un nouveau client établit une connexion WebSocket.
      */
-            wss.on('connection', (ws, req) => { handleNewConnection(ws, req); });
+    wss.on('connection', (ws, req) => { handleNewConnection(ws, req); });
 }
 
 // On lance le serveur

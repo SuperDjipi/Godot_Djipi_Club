@@ -11,14 +11,12 @@ class_name MoveValidator
 # ============================================================================
 
 var board_manager: BoardManager
-var dictionary_manager: DictionaryManager
 
 # ============================================================================
 # FONCTION : Initialiser le validateur
 # ============================================================================
 func initialize(board_mgr: BoardManager, dict_mgr: DictionaryManager = null) -> void:
 	board_manager = board_mgr
-	dictionary_manager = dict_mgr
 
 # ============================================================================
 # FONCTION : Valider un mouvement
@@ -76,8 +74,8 @@ func validate_move(temp_tiles: Array) -> Dictionary:
 		
 		# Vérifier la validité du mot
 		var is_valid = true
-		if dictionary_manager and dictionary_manager.is_loaded:
-			is_valid = dictionary_manager.is_valid_word(word_text)
+		if ScrabbleConfig.is_dictionary_loaded:
+			is_valid = ScrabbleConfig.is_valid_word(word_text)
 		
 		# Trouver le score correspondant
 		var word_score = 0

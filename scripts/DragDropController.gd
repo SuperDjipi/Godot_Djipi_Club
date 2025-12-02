@@ -96,21 +96,21 @@ func _start_drag_from_rack(tile_node: Panel, index: int, parent: Node2D) -> void
 	drag_origin = {"type": "rack", "pos": index}
 	rack_manager.remove_tile_at(index)
 	
-	# Animer vers la vue plateau si nécessaire
-	if not board_manager.is_board_focused:
-		board_manager.animate_to_board_view()
-	
-	# Redimensionner la tuile
-	var tile_tween = tile_node.create_tween()
-	var target_size = Vector2(board_manager.tile_size_board - 4, board_manager.tile_size_board - 4)
-	tile_tween.tween_property(tile_node, "custom_minimum_size", target_size, 0.2)
-	
-	# Repositionner les labels
-	var letter_lbl = tile_node.get_node_or_null("LetterLabel")
-	var value_lbl = tile_node.get_node_or_null("ValueLabel")
-	if letter_lbl and value_lbl:
-		tile_tween.tween_property(letter_lbl, "position", Vector2(board_manager.tile_size_board * 0.2, board_manager.tile_size_board * 0.05), 0.2)
-		tile_tween.tween_property(value_lbl, "position", Vector2(board_manager.tile_size_board * 0.6, board_manager.tile_size_board * 0.55), 0.2)
+	## Animer vers la vue plateau si nécessaire
+	#if not board_manager.is_board_focused:
+		#board_manager.animate_to_board_view()
+	#
+	## Redimensionner la tuile
+	#var tile_tween = tile_node.create_tween()
+	#var target_size = Vector2(board_manager.tile_size_board - 4, board_manager.tile_size_board - 4)
+	#tile_tween.tween_property(tile_node, "custom_minimum_size", target_size, 0.2)
+	#
+	## Repositionner les labels
+	#var letter_lbl = tile_node.get_node_or_null("LetterLabel")
+	#var value_lbl = tile_node.get_node_or_null("ValueLabel")
+	#if letter_lbl and value_lbl:
+		#tile_tween.tween_property(letter_lbl, "position", Vector2(board_manager.tile_size_board * 0.2, board_manager.tile_size_board * 0.05), 0.2)
+		#tile_tween.tween_property(value_lbl, "position", Vector2(board_manager.tile_size_board * 0.6, board_manager.tile_size_board * 0.55), 0.2)
 	
 	# ✅ Reparenter dans le CanvasLayer
 	var drag_parent = _get_canvas_layer_for_drag(parent)
@@ -408,7 +408,9 @@ func _try_drop_on_board(pos: Vector2) -> bool:
 	var board_pos = board_manager.get_board_position_at(pos)
 	if board_pos != null and board_manager.get_tile_at(board_pos) == null:
 		print("  -> Dropping on board at", board_pos)
-		
+		# ✅ NOUVEAU : Passer en mode focused au premier drop sur le plateau
+		if not board_manager.is_board_focused:
+			board_manager.animate_to_board_view()
 		var tile_data = dragging_tile.get_meta("tile_data")
 		board_manager.set_tile_at(board_pos, tile_data)
 		

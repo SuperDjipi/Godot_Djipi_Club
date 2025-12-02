@@ -1,16 +1,11 @@
 # game_state_sync.gd
 # ============================================================================
-# SYNCHRONISEUR D'ÉTAT DE JEU
+# SYNCHRONISEUR D'ÉTAT DE JEU - VERSION 2.0
 # ============================================================================
-# Ce module fait le pont entre :
-# - Le plateau local (ScrabbleGame.gd, BoardManager, RackManager)
-# - Le serveur distant (NetworkManager)
-#
-# Il gère :
-# - La synchronisation de l'état du jeu
-# - La conversion entre les structures Godot et JSON
-# - L'envoi des coups au serveur
-# - La réception et application des mises à jour
+# Améliorations :
+# - Gestion de l'état initial stocké dans NetworkManager
+# - Variable game_has_started pour détecter la reprise de partie
+# - Gestion améliorée du premier tour
 # ============================================================================
 
 extends Node
@@ -27,6 +22,7 @@ var drag_drop_controller: DragDropController
 var current_game_state: Dictionary = {}
 var my_player_id: String = ""
 var is_my_turn: bool = false
+var game_has_started: bool = false  # NOUVEAU : Pour détecter la reprise
 
 # Signaux
 signal my_turn_started()
@@ -57,6 +53,17 @@ func initialize(
 	
 	# Récupérer l'ID du joueur
 	my_player_id = network_manager.player_id
+	
+	# NOUVEAU : Traiter l'état initial s'il existe déjà
+	var last_state = network_manager.get_last_game_state()
+	if not last_state.is_empty():
+		print("🔄 État initial trouvé dans NetworkManager, traitement immédiat...")
+		# Utiliser call_deferred pour éviter de traiter pendant _ready()
+		call_deferred("_on_game_state_received", last_state)
+		# Nettoyer pour éviter de le retraiter
+		network_manager.clear_last_game_state()
+	else:
+		print("⏳ En attente du premier état du jeu...")
 	
 	print("🔄 GameStateSync initialisé pour le joueur : ", my_player_id)
 
@@ -91,9 +98,10 @@ func _on_game_state_received(payload: Dictionary) -> void:
 	var player_rack = payload.get("playerRack", [])
 	var status = current_game_state.get("status", "")
 	
-	# 1. Vérifier si la partie démarre
-	if status == "PLAYING" and not _is_game_started():
-		print("🎮 La partie commence !")
+	# 1. Vérifier si la partie est en cours (MODIFIÉ)
+	if status == "PLAYING" and not game_has_started:
+		print("🎮 La partie est en cours !")
+		game_has_started = true
 		game_started.emit()
 	
 	# 2. Mettre à jour le plateau
@@ -102,7 +110,7 @@ func _on_game_state_received(payload: Dictionary) -> void:
 	# 3. Mettre à jour le chevalet du joueur
 	_update_rack(player_rack)
 	
-	# 4. Vérifier si c'est notre tour
+	# 4. Vérifier si c'est notre tour (IMPORTANT pour la reprise)
 	_check_if_my_turn()
 	
 	# 5. Vérifier si la partie est terminée
@@ -159,21 +167,20 @@ func _update_board(board_data: Array) -> void:
 				# Créer la représentation visuelle
 				var cell = board_manager.get_cell_at(Vector2i(x, y))
 				var tile_manager = scrabble_game.tile_manager
-				var tile_node = tile_manager.create_tile_visual(godot_tile, cell, board_manager.tile_size_board)
+				tile_manager.create_tile_visual(godot_tile, cell, board_manager.tile_size_board)
 				
-				# ✅ Si c'est un joker avec une lettre assignée, mettre à jour l'affichage
-				if godot_tile.is_joker and godot_tile.assigned_letter != null:
-					scrabble_game._update_joker_visual(tile_node, godot_tile.assigned_letter)
-
 				# Mettre à jour les données du plateau
 				board_manager.set_tile_at(Vector2i(x, y), godot_tile)
-
+				
 				# Marquer comme verrouillée si nécessaire
 				var is_locked = cell_data.get("isLocked", false)
 				if is_locked:
-					tile_node.set_meta("locked", true)
-					tile_node.modulate = Color(0.85, 0.85, 0.65)  # Légèrement plus sombre
-					
+					# Les tuiles verrouillées ne peuvent pas être déplacées
+					var tile_node = TileManager.get_tile_in_cell(cell)
+					if tile_node:
+						tile_node.set_meta("locked", true)
+						tile_node.modulate = Color(0.85, 0.85, 0.65)  # Légèrement plus sombre
+
 # ============================================================================
 # MISE À JOUR DU CHEVALET
 # ============================================================================
@@ -248,6 +255,7 @@ func _convert_godot_tile_to_server(godot_tile: Dictionary) -> Dictionary:
 func _check_if_my_turn() -> void:
 	"""
 	Vérifie si c'est le tour du joueur local
+	AMÉLIORATION : Gère correctement la première connexion / reprise de partie
 	"""
 	
 	var players = current_game_state.get("players", [])
@@ -261,10 +269,18 @@ func _check_if_my_turn() -> void:
 		is_my_turn = (current_player_id == my_player_id)
 		
 		if is_my_turn and not was_my_turn:
+			# Transition : ce n'était pas mon tour, maintenant oui
 			print("✅ C'est votre tour !")
 			my_turn_started.emit()
 		elif not is_my_turn and was_my_turn:
+			# Transition : c'était mon tour, maintenant non
 			print("⏳ En attente de l'autre joueur...")
+			my_turn_ended.emit()
+		elif not is_my_turn and not was_my_turn and game_has_started:
+			# NOUVEAU : Cas de la première connexion - ce n'est pas mon tour
+			var other_player_name = current_player.get("name", "l'adversaire")
+			print("⏳ En attente du tour de ", other_player_name)
+			# Émettre pour mettre à jour l'UI
 			my_turn_ended.emit()
 
 # ============================================================================
@@ -370,26 +386,8 @@ func _on_error_received(error_message: String) -> void:
 	
 	print("❌ Erreur du serveur : ", error_message)
 	
-	# Afficher un message à l'utilisateur
-	_show_error_popup(error_message)
-	
-	# Remettre les tuiles temporaires au chevalet
-	if scrabble_game.has_method("_return_temp_tiles_to_rack"):
-		scrabble_game._return_temp_tiles_to_rack()
-	
-	# Réactiver les boutons pour que le joueur puisse rejouer
-	if scrabble_game.has_method("_on_my_turn_started"):
-		scrabble_game._on_my_turn_started()
-
-# ============================================================================
-# FONCTION : Afficher un popup d'erreur
-# ============================================================================
-func _show_error_popup(error_message: String) -> void:
-	"""Affiche un popup avec le message d'erreur du serveur"""
-	
-	# Appeler une fonction du ScrabbleGame
-	if scrabble_game.has_method("_show_server_error"):
-		scrabble_game._show_server_error(error_message)
+	# TODO: Afficher un message à l'utilisateur
+	# Par exemple, si le coup est invalide, on peut remettre les tuiles dans le chevalet
 
 # ============================================================================
 # UTILITAIRES
@@ -397,7 +395,7 @@ func _show_error_popup(error_message: String) -> void:
 
 func _is_game_started() -> bool:
 	"""Vérifie si la partie est en cours"""
-	return current_game_state.get("status", "") == "PLAYING"
+	return game_has_started
 
 func get_current_player_name() -> String:
 	"""Retourne le nom du joueur dont c'est le tour"""

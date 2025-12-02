@@ -1,6 +1,6 @@
 [gd_scene load_steps=2 format=3 uid="uid://r4mb4gxpvnhn"]
 
-[ext_resource type="Script" uid="uid://cqfsogqjddbam" path="res://scripts/login.gd" id="1_cau7c"]
+[ext_resource type="Script" uid="uid://cpjvk10srjqw8" path="res://scripts/login.gd" id="1_cau7c"]
 
 [node name="Control" type="Control"]
 layout_mode = 3
@@ -27,10 +27,18 @@ grow_horizontal = 2
 grow_vertical = 2
 alignment = 1
 
-[node name="Label" type="Label" parent="VBoxContainer"]
+[node name="MarginContainer" type="MarginContainer" parent="VBoxContainer"]
+custom_minimum_size = Vector2(0, 300)
 layout_mode = 2
-text = "Le Bar CS"
+
+[node name="Label" type="RichTextLabel" parent="VBoxContainer/MarginContainer"]
+layout_mode = 2
+theme_override_colors/default_color = Color(0, 0.41382846, 0.41390425, 1)
+theme_override_font_sizes/normal_font_size = 60
+text = "Djipi Club"
+fit_content = true
 horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="PlayerNameInput" type="LineEdit" parent="VBoxContainer"]
 layout_mode = 2
@@ -52,25 +60,6 @@ text = "Se connecter"
 [node name="HSeparator" type="HSeparator" parent="VBoxContainer"]
 layout_mode = 2
 
-[node name="Label2" type="Label" parent="VBoxContainer"]
-custom_minimum_size = Vector2(0, 40)
-layout_mode = 2
-text = "Rejoindre ou créer une partie"
-horizontal_alignment = 1
-vertical_alignment = 1
-
-[node name="GameCodeInput" type="LineEdit" parent="VBoxContainer"]
-layout_mode = 2
-placeholder_text = "Code de la partie (ex: ABCD"
-
-[node name="JoinButton" type="Button" parent="VBoxContainer"]
-layout_mode = 2
-text = "Rejoindre"
-
-[node name="CreateButton" type="Button" parent="VBoxContainer"]
-layout_mode = 2
-text = "Créer une partie"
-
 [node name="StatusLabel" type="Label" parent="VBoxContainer"]
 custom_minimum_size = Vector2(100, 0)
 layout_mode = 2
@@ -78,4 +67,5 @@ text = "---"
 horizontal_alignment = 1
 autowrap_mode = 2
 
-[node name="APIRequest" type="HTTPRequest" parent="."]
+[node name="HSeparator2" type="HSeparator" parent="VBoxContainer"]
+layout_mode = 2

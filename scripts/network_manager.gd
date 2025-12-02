@@ -1,5 +1,6 @@
 # network_manager.gd
 # Gère la connexion WebSocket avec le serveur de jeu
+# VERSION 2.0 : Avec stockage de l'état initial
 extends Node
 
 # Configuration du serveur
@@ -12,7 +13,18 @@ var connection_status = WebSocketPeer.STATE_CLOSED
 # Informations du joueur
 var player_id: String = ""
 var player_name: String = ""
-var current_game_id: String = ""
+var game_id: String = ""
+
+# ============================================================================
+# NOUVEAU : STOCKAGE DE L'ÉTAT INITIAL
+# ============================================================================
+
+# Stocker le dernier état reçu pour les connexions tardives
+var last_game_state: Dictionary = {}
+
+# ============================================================================
+# SIGNAUX
+# ============================================================================
 
 # Signaux pour notifier les autres noeuds
 signal connected_to_server()
@@ -20,6 +32,10 @@ signal disconnected_from_server()
 signal connection_error(error_message: String)
 signal game_state_received(game_state: Dictionary)
 signal error_received(error_message: String)
+
+# ============================================================================
+# INITIALISATION
+# ============================================================================
 
 func _ready():
 	print("NetworkManager initialisé")
@@ -46,15 +62,20 @@ func _process(_delta):
 		var message = packet.get_string_from_utf8()
 		_handle_server_message(message)
 
-## CONNEXION AU SERVEUR
+# ============================================================================
+# CONNEXION AU SERVEUR
+# ============================================================================
 
-func connect_to_server(game_id: String, player_id_param: String) -> void:
+func connect_to_server(game_id_param: String, player_id_param: String) -> void:
 	"""
 	Établit une connexion WebSocket au serveur
-	Le serveur attend l'URL : ws://djipi.club:8080/GAMEID?playerId=yyyy
+	Le serveur attend l'URL : ws://djipi.club:8080/{gameId}?playerId={playerId}
 	"""
 	player_id = player_id_param
-	current_game_id = game_id
+	game_id = game_id_param
+	
+	# Nettoyer l'ancien état
+	clear_last_game_state()
 	
 	# Format attendu par le serveur : /{gameId}?playerId={playerId}
 	var full_url = SERVER_URL + "/" + game_id + "?playerId=" + player_id
@@ -70,8 +91,13 @@ func disconnect_from_server() -> void:
 	if socket.get_ready_state() == WebSocketPeer.STATE_OPEN:
 		socket.close()
 		print("🔌 Déconnexion du serveur")
+	
+	# Nettoyer l'état stocké
+	clear_last_game_state()
 
-## GESTION DES MESSAGES ENTRANTS
+# ============================================================================
+# GESTION DES MESSAGES ENTRANTS
+# ============================================================================
 
 func _handle_server_message(message: String) -> void:
 	"""Traite les messages JSON reçus du serveur"""
@@ -108,6 +134,11 @@ func _handle_game_state_update(data: Dictionary) -> void:
 	print("🎮 État du jeu mis à jour")
 	print("  - Joueurs : ", game_state.get("players", []).size())
 	print("  - Chevalet : ", player_rack.size(), " tuiles")
+	print("  - Status : ", game_state.get("status", ""))
+	
+	# NOUVEAU : Stocker l'état
+	last_game_state = payload
+	print("💾 État stocké dans NetworkManager")
 	
 	# Émettre le signal pour que le jeu mette à jour l'affichage
 	game_state_received.emit(payload)
@@ -120,7 +151,9 @@ func _handle_error(data: Dictionary) -> void:
 	print("❌ Erreur du serveur : ", error_message)
 	error_received.emit(error_message)
 
-## ENVOI DE MESSAGES AU SERVEUR
+# ============================================================================
+# ENVOI DE MESSAGES AU SERVEUR
+# ============================================================================
 
 func send_event(event_type: String, payload: Dictionary = {}) -> void:
 	"""Envoie un événement au serveur"""
@@ -138,7 +171,9 @@ func send_event(event_type: String, payload: Dictionary = {}) -> void:
 	
 	socket.send_text(json_string)
 
-## ACTIONS DE JEU
+# ============================================================================
+# ACTIONS DE JEU
+# ============================================================================
 
 func start_game() -> void:
 	"""Demande au serveur de démarrer la partie"""
@@ -155,7 +190,29 @@ func pass_turn() -> void:
 	"""Passe son tour"""
 	send_event("PASS_TURN")
 
-## UTILITAIRES
+# ============================================================================
+# NOUVEAU : GESTION DE L'ÉTAT STOCKÉ
+# ============================================================================
+
+func get_last_game_state() -> Dictionary:
+	"""
+	Récupère le dernier état reçu
+	Utilisé par GameStateSync pour traiter l'état initial
+	"""
+	return last_game_state
+
+func clear_last_game_state() -> void:
+	"""Efface l'état stocké"""
+	last_game_state = {}
+	print("🗑️ État stocké effacé")
+
+func has_stored_state() -> bool:
+	"""Vérifie si un état est stocké"""
+	return not last_game_state.is_empty()
+
+# ============================================================================
+# UTILITAIRES
+# ============================================================================
 
 func is_connected_to_server() -> bool:
 	"""Vérifie si on est connecté au serveur"""
