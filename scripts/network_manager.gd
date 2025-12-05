@@ -75,7 +75,7 @@ func connect_to_server(game_id_param: String, player_id_param: String) -> void:
 	game_id = game_id_param
 	
 	# Nettoyer l'ancien état
-	clear_last_game_state()
+	# clear_last_game_state()
 	
 	# Format attendu par le serveur : /{gameId}?playerId={playerId}
 	var full_url = SERVER_URL + "/" + game_id + "?playerId=" + player_id
@@ -101,7 +101,7 @@ func disconnect_from_server() -> void:
 
 func _handle_server_message(message: String) -> void:
 	"""Traite les messages JSON reçus du serveur"""
-	print("📥 Message reçu : ", message)
+	print("📥 Message reçu dans NM hsm ")
 	
 	var json = JSON.new()
 	var parse_result = json.parse(message)
@@ -119,8 +119,10 @@ func _handle_server_message(message: String) -> void:
 	
 	match event_type:
 		"GAME_STATE_UPDATE":
+			print("       - ", event_type)
 			_handle_game_state_update(data)
 		"ERROR":
+			print("       - ", event_type)
 			_handle_error(data)
 		_:
 			print("⚠️ Type d'événement inconnu : ", event_type)

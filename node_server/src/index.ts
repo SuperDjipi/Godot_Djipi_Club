@@ -561,23 +561,36 @@ async function startServer() {
             // Créer une nouvelle partie (même logique que /api/games)
             const gameId = generateGameCode();
 
-            const newPlayer: Player = {
+            const firstPlayer: Player = {
                 id: playerId,
                 name: challenger.name,
                 score: 0,
                 rack: [],
                 isActive: true,
             };
+            const secondPlayer: Player = {
+                id: opponentId,
+                name: opponent.name,
+                score: 0,
+                rack: [],
+                isActive: true,
+            };
+    // 2. Créer une pioche de tuiles et la distribuer
+    let tileBag = createTileBag();
+    const { drawnTiles: firstTiles, newBag: bagAfterAlpha } = drawTiles(tileBag, 7);
+    const { drawnTiles: secondTiles, newBag: finalBag } = drawTiles(bagAfterAlpha, 7);
+    firstPlayer.rack = firstTiles;
+    secondPlayer.rack = secondTiles;
 
             const newGame: GameState = {
                 id: gameId,
                 hostId: playerId,
                 board: createEmptyBoard(),
-                players: [newPlayer],
-                tileBag: createTileBag(),
-                status: GameStatus.WAITING_FOR_PLAYERS,
+                players: [firstPlayer, secondPlayer],
+                tileBag: finalBag,
+                status: GameStatus.PLAYING,
                 moves: [],
-                turnNumber: 0,
+                turnNumber: 1,
                 currentPlayerIndex: 0,
             };
 
@@ -588,10 +601,16 @@ async function startServer() {
 
             // TODO: Envoyer une notification à l'adversaire (WebSocket, push notification, etc.)
 
+            const { stateForPlayer, playerRack } = prepareStateForPlayer(newGame, playerId);
+
             res.status(201).json({
                 message: `Défi envoyé à ${opponent.name} !`,
-                gameId: gameId
+                gameId: gameId,
+                gameState: stateForPlayer,
+                playerRack: playerRack
             });
+
+            broadcastGameState(gameId, newGame);
 
         } catch (error) {
             console.error("Erreur lors de la création du défi:", error);

@@ -23,14 +23,6 @@ var players_list_container: VBoxContainer
 const SERVER_API_URL = "http://djipi.club:8080"
 
 # ============================================================================
-# VARIABLES LOCALES
-# ============================================================================
-
-var player_id: String = ""
-var player_name: String = ""
-var is_logged_in: bool = false
-
-# ============================================================================
 # INITIALISATION
 # ============================================================================
 
@@ -47,9 +39,16 @@ func _ready():
 	
 	# Créer les sections dynamiques
 	_create_ui_sections()
-	
-	# Vérifier les identifiants sauvegardés
-	_check_saved_credentials()
+
+	# On vérifie l'état de la session au lieu des fichiers de sauvegarde
+	if PlayerSession.is_logged_in():
+		print("✅ Le joueur est déjà connecté via la session.")
+		# Le joueur revient d'une autre scène, il est déjà connecté.
+		player_name_input.text = PlayerSession.player_name
+		_on_successful_login() # On lance directement l'affichage des listes
+	else:
+		# C'est le premier lancement du jeu, on vérifie les fichiers sauvegardés
+		_check_saved_credentials_and_auto_login()
 	
 	print("✅ Initialisation terminée")
 
@@ -110,22 +109,19 @@ func _create_ui_sections() -> void:
 # GESTION DES IDENTIFIANTS
 # ============================================================================
 
-func _check_saved_credentials() -> void:
-	"""Vérifie si on a déjà des identifiants sauvegardés"""
-	
+func _check_saved_credentials_and_auto_login() -> void:
+	"""
+	Vérifie les identifiants sauvegardés ET tente une connexion automatique.
+	"""
 	var config = ConfigFile.new()
 	var err = config.load("user://player_data.cfg")
-	
+
 	if err == OK:
 		var saved_name = config.get_value("player", "name", "")
-		var saved_id = config.get_value("player", "id", "")
-		
-		if saved_name != "" and saved_id != "":
+		if not saved_name.is_empty():
+			print("🔑 Identifiants trouvés pour '", saved_name, "'. Tentative de connexion automatique...")
 			player_name_input.text = saved_name
-			player_id = saved_id
-			player_name = saved_name
-			update_status("Bienvenue à nouveau, " + saved_name + " !")
-			login_button.text = "Se connecter (" + saved_name + ")"
+			_on_login_pressed() # On simule un clic sur le bouton de connexion !
 
 func _save_credentials(name: String, id: String) -> void:
 	"""Sauvegarde les identifiants"""
@@ -198,8 +194,9 @@ func _on_register_completed(result: int, code: int, headers: PackedStringArray, 
 	var response = JSON.parse_string(body.get_string_from_utf8())
 	
 	if code == 201:  # Created
-		player_id = response.get("playerId", "")
-		player_name = player_name_input.text.strip_edges()
+		var player_id = response.get("playerId", "")
+		var player_name = player_name_input.text.strip_edges()
+		PlayerSession.set_player_data(player_id, player_name)
 		
 		print("✅ Inscription réussie : ", player_name, " (", player_id, ")")
 		
@@ -242,14 +239,13 @@ func _on_login_completed(result: int, code: int, headers: PackedStringArray, bod
 	var response = JSON.parse_string(body.get_string_from_utf8())
 	
 	if code == 200:  # OK
-		player_id = response.get("playerId", "")
-		player_name = response.get("name", "")
+		# On stocke les infos dans le Singleton
+		var p_id = response.get("playerId", "")
+		var p_name = response.get("name", "")
+		PlayerSession.set_player_data(p_id, p_name)
 		
-		print("✅ Connexion réussie : ", player_name, " (", player_id, ")")
-		
-		# Sauvegarder les identifiants
-		_save_credentials(player_name, player_id)
-		
+		print("✅ Connexion réussie : ", p_name, " (", p_id, ")")
+		_save_credentials(p_name, p_id)		
 		# Marquer comme connecté
 		_on_successful_login()
 		
@@ -266,15 +262,15 @@ func _on_login_completed(result: int, code: int, headers: PackedStringArray, bod
 
 func _on_successful_login() -> void:
 	"""Appelé après une inscription ou connexion réussie"""
-	update_status("✅ Bienvenue " + player_name + " !")
-	is_logged_in = true
+	update_status("✅ Bienvenue " + PlayerSession.player_name + " !")
+	# is_logged_in = true
 	
 	# Désactiver les boutons d'authentification
 	register_button.disabled = true
 	login_button.disabled = true
 	player_name_input.editable = false
 	
-	print("✅ Joueur authentifié : ", player_id)
+	print("✅ Joueur authentifié : ", PlayerSession.player_id)
 	
 	# Charger les listes
 	refresh_games_list()
@@ -286,12 +282,12 @@ func _on_successful_login() -> void:
 
 func refresh_games_list() -> void:
 	"""Demande la liste des parties du joueur"""
-	if player_id.is_empty():
+	if PlayerSession.player_id.is_empty():
 		return
 	
 	print("📋 Rafraîchissement de la liste des parties...")
 	
-	var url = SERVER_API_URL + "/api/players/" + player_id + "/games"
+	var url = SERVER_API_URL + "/api/players/" + PlayerSession.player_id + "/games"
 	_make_http_request(url, _on_games_list_received)
 
 func _on_games_list_received(result: int, code: int, headers: PackedStringArray, body: PackedByteArray) -> void:
@@ -443,7 +439,7 @@ func display_players_list(players: Array) -> void:
 		var pid = player_info.get("id", "")
 		
 		# Ne pas afficher soi-même
-		if pid == player_id:
+		if pid == PlayerSession.player_id:
 			continue
 		
 		var card = _create_player_card(player_info)
@@ -505,7 +501,7 @@ func _challenge_player(opponent_id: String) -> void:
 	update_status("🔄 Envoi du défi...")
 	
 	var url = SERVER_API_URL + "/api/challenge/" + opponent_id
-	var body = JSON.stringify({"playerId": player_id})
+	var body = JSON.stringify({"playerId": PlayerSession.player_id})
 	
 	_make_http_request(url, _on_challenge_completed, HTTPClient.METHOD_POST, body)
 
@@ -516,8 +512,16 @@ func _on_challenge_completed(result: int, code: int, headers: PackedStringArray,
 	
 	if code == 201:  # Created
 		var game_id = response.get("gameId", "")
+		var game_state = response.get("gameState", {})
+		var player_rack = response.get("playerRack", [])
 		print("✅ Défi envoyé ! Game ID : ", game_id)
 		update_status("✅ Défi envoyé !")
+		# Stocker l'état dans NetworkManager AVANT de se connecter
+		if not game_state.is_empty():
+			network_manager.last_game_state = {
+				"gameState": game_state,
+				"playerRack": player_rack
+			}
 		
 		# Connecter à la partie créée
 		await get_tree().create_timer(0.3).timeout
@@ -548,7 +552,7 @@ func _try_reconnect(game_id: String) -> void:
 	print("🔄 Étape 1 : Reconnexion...")
 	
 	var url = SERVER_API_URL + "/api/games/" + game_id + "/reconnect"
-	var body = JSON.stringify({"playerId": player_id})
+	var body = JSON.stringify({"playerId": PlayerSession.player_id})
 	
 	_make_http_request(
 		url,
@@ -577,7 +581,7 @@ func _try_join(game_id: String) -> void:
 	print("🤝 Étape 2 : Join...")
 	
 	var url = SERVER_API_URL + "/api/games/" + game_id + "/join"
-	var body = JSON.stringify({"playerId": player_id})
+	var body = JSON.stringify({"playerId": PlayerSession.player_id})
 	
 	_make_http_request(
 		url,
@@ -609,12 +613,12 @@ func _start_websocket(game_id: String) -> void:
 	update_status("🔌 Connexion WebSocket...")
 	
 	# Configurer le NetworkManager
-	network_manager.player_id = player_id
-	network_manager.player_name = player_name
+	network_manager.player_id = PlayerSession.player_id
+	network_manager.player_name = PlayerSession.player_name
 	network_manager.game_id = game_id
 	
 	# Connexion WebSocket
-	network_manager.connect_to_server(game_id, player_id)
+	network_manager.connect_to_server(game_id, PlayerSession.player_id)
 	
 	# Attendre la connexion puis changer de scène
 	await network_manager.connected_to_server

@@ -11,6 +11,7 @@
 extends Node
 class_name GameStateSync
 
+
 # Références
 var network_manager: Node
 var scrabble_game: Node2D
@@ -33,7 +34,6 @@ signal game_ended(winner: String)
 # ============================================================================
 # INITIALISATION
 # ============================================================================
-
 func initialize(
 	net_mgr: Node,
 	game: Node2D,
@@ -47,26 +47,20 @@ func initialize(
 	rack_manager = rack_mgr
 	drag_drop_controller = drag_ctrl
 	
-	# Connexion aux signaux du NetworkManager
 	network_manager.game_state_received.connect(_on_game_state_received)
 	network_manager.error_received.connect(_on_error_received)
 	
-	# Récupérer l'ID du joueur
 	my_player_id = network_manager.player_id
 	
-	# NOUVEAU : Traiter l'état initial s'il existe déjà
 	var last_state = network_manager.get_last_game_state()
+	
 	if not last_state.is_empty():
-		print("🔄 État initial trouvé dans NetworkManager, traitement immédiat...")
-		# Utiliser call_deferred pour éviter de traiter pendant _ready()
 		call_deferred("_on_game_state_received", last_state)
-		# Nettoyer pour éviter de le retraiter
 		network_manager.clear_last_game_state()
 	else:
-		print("⏳ En attente du premier état du jeu...")
+		print("État vide")
 	
-	print("🔄 GameStateSync initialisé pour le joueur : ", my_player_id)
-
+	print("GameStateSync initialisé")
 # ============================================================================
 # RÉCEPTION DE L'ÉTAT DU JEU DEPUIS LE SERVEUR
 # ============================================================================

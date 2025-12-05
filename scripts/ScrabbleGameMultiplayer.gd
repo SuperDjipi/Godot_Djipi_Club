@@ -21,7 +21,8 @@ var move_validator: MoveValidator
 var viewport_size: Vector2
 
 # --- RÉFÉRENCES UI (depuis la scène) ---
-@onready var score_board_container = $CanvasLayer/MainContainer/VBoxContainer/ScoreBoard
+@onready var score_board_container = $CanvasLayer/MainContainer/VBoxContainer/TopContainer/ScoreBoard
+@onready var back_button = $CanvasLayer/MainContainer/VBoxContainer/TopContainer/BackButton
 @onready var validation_label = $CanvasLayer/MainContainer/VBoxContainer/ValidationPanel/MarginContainer/ValidationLabel
 @onready var board_container = $CanvasLayer/MainContainer/VBoxContainer/BoardContainer
 @onready var rack_container = $CanvasLayer/MainContainer/VBoxContainer/RackContainer
@@ -110,6 +111,7 @@ func _connect_buttons() -> void:
 	shuffle_button.pressed.connect(_on_shuffle_pressed)
 	pass_button.pressed.connect(_on_pass_pressed)
 	play_button.pressed.connect(_on_play_pressed)
+	back_button.pressed.connect(_on_back_pressed)
 
 # ============================================================================
 # FONCTION : Initialiser l'UI
@@ -187,18 +189,18 @@ func _show_validation_result(result: Dictionary) -> void:
 		for word_info in result.words:
 			if word_info.valid:
 				# Mot valide : vert avec score
-				message += "[color=#2ecc71]✓ %s[/color] [color=#95a5a6]%d pts[/color]\n" % [word_info.text, word_info.score]
+				message += "<[color=#2ecc71]✓ %s[/color] [color=#95a5a6]%d pts[/color]>" % [word_info.text, word_info.score]
 			else:
 				# Mot invalide : rouge sans score
-				message += "[color=#e74c3c]✗ %s[/color]\n" % word_info.text
+				message += "<[color=#e74c3c]✗ %s[/color]>" % word_info.text
 		
 		# Bonus Scrabble
 		if result.bonus_scrabble > 0:
-			message += "[color=#f39c12]★ BONUS[/color] [color=#95a5a6]+50 pts[/color]\n"
+			message += "[color=#f39c12]★ BONUS[/color]"
 		
 		# Score total si valide
 		if result.valid and result.total_score > 0:
-			message += "[color=#bdc3c7]―――――――――[/color]\n"
+			message += "\n[color=#bdc3c7]―――――――――[/color]\n"
 			message += "[color=#27ae60][b]%d points[/b][/color]" % result.total_score
 	
 	# Cas 3 : Aucun mot (ne devrait pas arriver)
@@ -362,6 +364,53 @@ func _on_play_pressed() -> void:
 	
 	# Vider la liste des tuiles temporaires
 	drag_drop_controller.get_temp_tiles().clear()
+
+
+func _on_back_pressed() -> void:
+	"""Retour à l'écran d'accueil"""
+	print("🔙 Retour à l'écran d'accueil...")
+	_return_to_login()
+
+func _return_to_login() -> void:
+	"""
+	Retourne à l'écran d'accueil de manière propre
+	- Déconnecte le WebSocket
+	- Sauvegarde l'état si nécessaire
+	- Change de scène
+	"""
+	
+	# Afficher un message de confirmation (optionnel)
+	print("🔙 Retour au menu...")
+	
+	# Déconnecter proprement du WebSocket
+	if network_manager and network_manager.is_connected_to_server():
+		print("🔌 Déconnexion du WebSocket...")
+		network_manager.disconnect_from_server()
+	
+	# Petit délai pour que l'UI se mette à jour
+	await get_tree().create_timer(0.3).timeout
+	
+	# Retour à l'écran de connexion
+	print("🏠 Changement de scène vers login...")
+	get_tree().change_scene_to_file("res://scenes/login.tscn")
+
+# ============================================================================
+# FONCTION : Gestion du bouton Back Android
+# ============================================================================
+
+func _notification(what: int) -> void:
+	"""
+	Appelée par Godot pour diverses notifications système
+	On l'utilise pour intercepter le bouton Back Android
+	"""
+	
+	if what == NOTIFICATION_WM_GO_BACK_REQUEST:
+		# Le joueur a appuyé sur le bouton Back Android
+		print("📱 Bouton Back Android pressé")
+		_on_back_pressed()
+		
+		# Empêcher le comportement par défaut (fermer l'app)
+		get_tree().set_input_as_handled()
 
 # ============================================================================
 # CALLBACKS RÉSEAU
