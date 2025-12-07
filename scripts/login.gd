@@ -6,11 +6,13 @@ extends Control
 # RÉFÉRENCES AUX NŒUDS UI
 # ============================================================================
 
-@onready var player_name_input = $VBoxContainer/PlayerNameInput
-@onready var register_button = $VBoxContainer/HBoxContainer/RegisterButton
-@onready var login_button = $VBoxContainer/HBoxContainer/LoginButton
+@onready var auth_container = $VBoxContainer/AuthContainer 
+@onready var player_name_input = $VBoxContainer/AuthContainer/PlayerNameInput
+@onready var register_button = $VBoxContainer/AuthContainer/HBoxContainer/RegisterButton
+@onready var login_button = $VBoxContainer/AuthContainer/HBoxContainer/LoginButton
 @onready var status_label = $VBoxContainer/StatusLabel
 @onready var network_manager = $"/root/NetworkManager"
+@onready var refresh_timer = $RefreshTimer
 
 # Références créées dynamiquement
 var games_list_container: VBoxContainer
@@ -32,6 +34,7 @@ func _ready():
 	# Connexion des signaux
 	register_button.pressed.connect(_on_register_pressed)
 	login_button.pressed.connect(_on_login_pressed)
+	refresh_timer.timeout.connect(refresh_games_list)
 	
 	# Connexion aux signaux du NetworkManager (seulement ceux utiles)
 	network_manager.connected_to_server.connect(_on_connected_to_server)
@@ -264,7 +267,7 @@ func _on_successful_login() -> void:
 	"""Appelé après une inscription ou connexion réussie"""
 	update_status("✅ Bienvenue " + PlayerSession.player_name + " !")
 	# is_logged_in = true
-	
+	auth_container.hide()
 	# Désactiver les boutons d'authentification
 	register_button.disabled = true
 	login_button.disabled = true
@@ -275,6 +278,20 @@ func _on_successful_login() -> void:
 	# Charger les listes
 	refresh_games_list()
 	refresh_players_list()
+	print("⏰ Démarrage du polling pour rafraîchir les parties (toutes les %d sec)." % refresh_timer.wait_time)
+	refresh_timer.start()
+
+# ============================================================================
+# GESTION DU CYCLE DE VIE DU NŒUD (important !)
+# ============================================================================
+
+func _exit_tree() -> void:
+	"""
+	Appelé quand ce nœud quitte la scène (par exemple, en passant à la scène de jeu).
+	C'est crucial pour arrêter le Timer et éviter qu'il ne tourne en arrière-plan.
+	"""
+	print("⏰ Arrêt du polling en quittant la scène d'accueil.")
+	refresh_timer.stop()
 
 # ============================================================================
 # LISTE DES PARTIES
@@ -283,6 +300,7 @@ func _on_successful_login() -> void:
 func refresh_games_list() -> void:
 	"""Demande la liste des parties du joueur"""
 	if PlayerSession.player_id.is_empty():
+		refresh_timer.stop()
 		return
 	
 	print("📋 Rafraîchissement de la liste des parties...")
@@ -352,7 +370,7 @@ func _create_game_card(game_info: Dictionary) -> PanelContainer:
 	vbox.add_child(hbox1)
 	
 	var id_label = Label.new()
-	id_label.text = "🎮 " + game_info.get("gameId", "???")
+	id_label.text = "🎮 %s - reste %d tuile(s) dans le sac" % [game_info.get("gameId", "???"), game_info.get("tileCount", -1)]
 	id_label.add_theme_font_size_override("font_size", 14)
 	hbox1.add_child(id_label)
 	
@@ -362,10 +380,10 @@ func _create_game_card(game_info: Dictionary) -> PanelContainer:
 	
 	var turn_label = Label.new()
 	if game_info.get("isMyTurn", false):
-		turn_label.text = "⬤ Votre tour"
+		turn_label.text = "⬤ Votre tour "
 		turn_label.add_theme_color_override("font_color", Color(0.3, 1, 0.3))
 	else:
-		turn_label.text = "⏳ Adversaire"
+		turn_label.text = "⏳ Adversaire "
 		turn_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
 	turn_label.add_theme_font_size_override("font_size", 12)
 	hbox1.add_child(turn_label)
@@ -373,7 +391,7 @@ func _create_game_card(game_info: Dictionary) -> PanelContainer:
 	# Ligne 2 : Adversaires
 	var opp_label = Label.new()
 	var opponents = game_info.get("opponents", [])
-	opp_label.text = "vs " + ", ".join(PackedStringArray(opponents))
+	opp_label.text = "contre " + ", ".join(PackedStringArray(opponents))
 	opp_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
 	opp_label.add_theme_font_size_override("font_size", 12)
 	vbox.add_child(opp_label)

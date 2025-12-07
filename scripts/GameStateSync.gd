@@ -76,6 +76,7 @@ func _on_game_state_received(payload: Dictionary) -> void:
 			"board": [...],
 			"players": [...],
 			"status": "PLAYING",
+			"tileBag": nombre de tuiles restantes
 			"currentPlayerIndex": 0,
 			"turnNumber": 1
 		},
@@ -99,7 +100,7 @@ func _on_game_state_received(payload: Dictionary) -> void:
 		game_started.emit()
 	
 	# 2. Mettre à jour le plateau
-	_update_board(current_game_state.get("board", []))
+	_update_board(current_game_state.get("board", []), current_game_state.get("placedPositions", []))
 	
 	# 3. Mettre à jour le chevalet du joueur
 	_update_rack(player_rack)
@@ -115,7 +116,7 @@ func _on_game_state_received(payload: Dictionary) -> void:
 # MISE À JOUR DU PLATEAU
 # ============================================================================
 
-func _update_board(board_data: Array) -> void:
+func _update_board(board_data: Array, placed_positions: Array) -> void:
 	"""
 	Met à jour le plateau local avec les données du serveur
 	
@@ -131,6 +132,7 @@ func _update_board(board_data: Array) -> void:
 		],
 		...
 	]
+	et positions des lettres posées par le précédent joueur : placed_positions
 	"""
 	
 	print("🎲 Mise à jour du plateau")
@@ -146,8 +148,18 @@ func _update_board(board_data: Array) -> void:
 				if tile_node:
 					tile_node.queue_free()
 				board_manager.set_tile_at(Vector2i(x, y), null)
+
+	# Convertir placed_positions en set pour recherche rapide
+	var placed_set = {}
+	for pos_dict in placed_positions:
+		var x = pos_dict.get("col", -1)
+		var y = pos_dict.get("row", -1)
+		if x >= 0 and y >= 0:
+			placed_set[Vector2i(x, y)] = true
 	
 	# Placer les nouvelles tuiles
+	var newly_placed_tiles = []  # Pour animer après
+	
 	for y in range(board_data.size()):
 		var row = board_data[y]
 		for x in range(row.size()):
@@ -161,7 +173,7 @@ func _update_board(board_data: Array) -> void:
 				# Créer la représentation visuelle
 				var cell = board_manager.get_cell_at(Vector2i(x, y))
 				var tile_manager = scrabble_game.tile_manager
-				tile_manager.create_tile_visual(godot_tile, cell, board_manager.tile_size_board)
+				var tile_node = tile_manager.create_tile_visual(godot_tile, cell, board_manager.tile_size_board)
 				
 				# Mettre à jour les données du plateau
 				board_manager.set_tile_at(Vector2i(x, y), godot_tile)
@@ -170,11 +182,55 @@ func _update_board(board_data: Array) -> void:
 				var is_locked = cell_data.get("isLocked", false)
 				if is_locked:
 					# Les tuiles verrouillées ne peuvent pas être déplacées
-					var tile_node = TileManager.get_tile_in_cell(cell)
-					if tile_node:
-						tile_node.set_meta("locked", true)
-						tile_node.modulate = Color(0.85, 0.85, 0.65)  # Légèrement plus sombre
-
+					#var tile_node = TileManager.get_tile_in_cell(cell)
+					#if tile_node:
+					tile_node.set_meta("locked", true)
+					tile_node.modulate = Color(0.85, 0.85, 0.65)  # Légèrement plus sombre
+				# Vérifier si cette tuile vient d'être posée
+				if placed_set.has(Vector2i(x, y)):
+					newly_placed_tiles.append(tile_node)
+	
+	# Animer les tuiles nouvellement posées
+	if not newly_placed_tiles.is_empty():
+		_animate_newly_placed_tiles(newly_placed_tiles)
+		
+func _animate_newly_placed_tiles(tiles: Array) -> void:
+	"""
+	Anime les tuiles avec un effet de pulse + flash depuis leur position
+	"""
+	
+	print("✨ Animation de %d tuile(s) nouvellement posée(s)" % tiles.size())
+	
+	for i in range(tiles.size()):
+		var tile_node = tiles[i]
+		if not tile_node:
+			continue
+		
+		var original_scale = tile_node.scale
+		# var original_modulate = tile_node.modulate
+		var original_modulate = Color(1.8, 1.8, 0, 1.0)
+		
+		# Commencer invisible et petit
+		tile_node.scale = Vector2.ZERO
+		tile_node.modulate = Color(2.0, 2.0, 1.5, 0.0)
+		
+		var delay = i * 0.1
+		
+		var tween = tile_node.create_tween()
+		tween.set_parallel(false)
+		
+		if delay > 0:
+			tween.tween_interval(delay)
+		
+		# Apparition explosive
+		tween.set_parallel(true)
+		tween.tween_property(tile_node, "scale", original_scale * 1.5, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tween.tween_property(tile_node, "modulate", Color(1.8, 1.8, 1.0, 1.0), 0.3)
+		
+		# Stabilisation avec rebond
+		tween.set_parallel(true)
+		tween.tween_property(tile_node, "scale", original_scale, 0.4).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
+		tween.tween_property(tile_node, "modulate", original_modulate, 0.4)
 # ============================================================================
 # MISE À JOUR DU CHEVALET
 # ============================================================================
@@ -347,6 +403,36 @@ func pass_turn() -> void:
 	print("⏭️ Passage de tour")
 	network_manager.pass_turn()
 
+# ============================================================================
+# ECHANDE LETTRES
+# ============================================================================
+func exchange_tiles(tile_indices: Array) -> void:
+	"""Échange les lettres spécifiées avec le sac"""
+	
+	if not is_my_turn:
+		print("⚠️ Ce n'est pas votre tour !")
+		return
+
+	if tile_indices.is_empty():
+		print("⚠️ Aucune lettre à échanger")
+		return
+
+	print("🔄 Échange de %d lettre(s)..." % tile_indices.size())
+
+	# Convertir les indices en IDs de tuiles pour le serveur
+	var tiles_to_exchange = []
+	for index in tile_indices:
+		var tile_data = rack_manager.get_tile_at(index)
+		if tile_data:
+			tiles_to_exchange.append(_convert_godot_tile_to_server(tile_data))
+
+	# Envoyer au serveur
+	network_manager.exchange_tiles(tiles_to_exchange)
+
+func get_remaining_tiles_in_bag() -> int:
+	"""Retourne le nombre de tuiles restantes dans le sac (depuis l'état du jeu)"""
+	var remaining_tiles = current_game_state.get("tileBag", {}).get("tileCount", -1)
+	return remaining_tiles # current_game_state.get("tileBag", 0)
 # ============================================================================
 # FIN DE PARTIE
 # ============================================================================

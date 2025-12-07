@@ -21,6 +21,12 @@ export interface PlayMoveEvent {
 export interface PassTurnEvent {
     type: "PASS_TURN";
 }
+export interface ExchangeTilesEvent {
+    type: "EXCHANGE_TILES";
+    payload: {
+        tilesToExchange: Tile[];
+    };
+}
 export interface RegisterProfileEvent {
     type: "REGISTER_PROFILE";
     payload: {
@@ -31,7 +37,7 @@ export interface RegisterProfileEvent {
 // ... (on pourra ajouter PassTurnEvent, ShuffleEvent, etc. plus tard)
 
 // Un type qui représente tous les événements possibles venant du client
-export type ClientToServerEvent = JoinGameEvent | StartGameEvent | PlayMoveEvent | PassTurnEvent | RegisterProfileEvent;
+export type ClientToServerEvent = JoinGameEvent | StartGameEvent | PlayMoveEvent | PassTurnEvent | ExchangeTilesEvent | RegisterProfileEvent;
 
 
 // --- Événements que le SERVEUR envoie au CLIENT ---

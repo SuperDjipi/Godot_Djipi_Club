@@ -13,7 +13,7 @@ var rack_manager: RackManager
 var drag_drop_controller: DragDropController
 var game_state_sync: GameStateSync
 var move_validator: MoveValidator
-
+var popup_active: bool = false
 # --- RÉFÉRENCES RÉSEAU ---
 @onready var network_manager = $"/root/NetworkManager"
 
@@ -132,6 +132,8 @@ func _initialize_ui() -> void:
 # FONCTION : Gestion des entrées utilisateur
 # ============================================================================
 func _input(event):
+	if popup_active:
+		return
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			if event.pressed:
@@ -335,13 +337,234 @@ func _on_shuffle_pressed() -> void:
 	pass
 
 func _on_pass_pressed() -> void:
-	"""Passer son tour"""
-	print("⏭️ Passage du tour...")
-	game_state_sync.pass_turn()
+	"""Ouvrir le popup d'échange/passage de tour"""
+	print("⏭️ Ouverture du dialogue de passage...")
+	_show_pass_dialog()
+
+func _show_pass_dialog() -> void:
+	"""Affiche un popup pour choisir entre passer ou échanger"""
+	# Chercher le CanvasLayer parent
+	var canvas_layer = get_node_or_null("CanvasLayer")
 	
-	# Désactiver temporairement les boutons
-	play_button.disabled = true
-	pass_button.disabled = true
+	if not canvas_layer:
+		print("❌ ERREUR : CanvasLayer introuvable !")
+		return
+	popup_active = true
+	var remaining_tiles = game_state_sync.get_remaining_tiles_in_bag()
+	var selected_indices = []  # Indices des lettres sélectionnées
+	
+	# Créer un fond semi-transparent
+	var overlay = ColorRect.new()
+	overlay.color = Color(0, 0, 0, 0.7)
+	overlay.size = viewport_size
+	overlay.position = Vector2.ZERO
+	overlay.name = "PassOverlay"
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	canvas_layer.add_child(overlay)
+
+	# Créer le panel principal
+	var panel = Panel.new()
+	# panel.custom_minimum_size = Vector2(500, 450)
+	panel.custom_minimum_size = Vector2(viewport_size.x - 10, 450)
+	panel.position = (viewport_size - panel.custom_minimum_size) / 2
+	overlay.add_child(panel)
+
+	# Conteneur vertical
+	var vbox = VBoxContainer.new()
+	vbox.position = Vector2(20, 20)
+	vbox.size = panel.size - Vector2(40, 40)
+	panel.add_child(vbox)
+	
+	# === TITRE ===
+	var title = Label.new()
+	title.text = "Passer votre tour"
+	title.add_theme_font_size_override("font_size", 24)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(title)
+
+	# Spacer
+	var spacer1 = Control.new()
+	spacer1.custom_minimum_size = Vector2(0, 20)
+	vbox.add_child(spacer1)
+
+	# === INFO SUR LE SAC ===
+	var info_label = Label.new()
+	var message = "Tuiles restantes dans le sac : %d" % remaining_tiles
+	message = "Plus de tuiles dans le sac" if (remaining_tiles == 0) else message
+	info_label.text = message
+	info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(info_label)
+
+	if (remaining_tiles > 0):
+		# Spacer
+		var spacer2 = Control.new()
+		spacer2.custom_minimum_size = Vector2(0, 10)
+		vbox.add_child(spacer2)
+
+		# === INSTRUCTION ===
+		var instruction = Label.new()
+		instruction.text = "Cliquez sur les lettres à échanger (0 à 7)"
+		instruction.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		vbox.add_child(instruction)
+
+		# Spacer
+		var spacer3 = Control.new()
+		spacer3.custom_minimum_size = Vector2(0, 10)
+		vbox.add_child(spacer3)
+
+		# === CHEVALET SÉLECTIONNABLE ===
+		var rack_container_popup = HBoxContainer.new()
+		rack_container_popup.alignment = BoxContainer.ALIGNMENT_CENTER
+		vbox.add_child(rack_container_popup)
+		
+		for i in range(ScrabbleConfig.RACK_SIZE):
+			var tile_data = rack_manager.get_tile_at(i)
+			if tile_data:
+				var tile_button = _create_selectable_tile(tile_data, i, selected_indices)
+				rack_container_popup.add_child(tile_button)
+			else:
+			# Emplacement vide
+				var empty = Panel.new()
+				empty.custom_minimum_size = Vector2(60, 60)
+				empty.modulate = Color(0.5, 0.5, 0.5, 0.3)
+				rack_container_popup.add_child(empty)
+
+		# Spacer
+		var spacer4 = Control.new()
+		spacer4.custom_minimum_size = Vector2(0, 20)
+		vbox.add_child(spacer4)
+
+		# === FEEDBACK ===
+		var feedback = Label.new()
+		feedback.name = "FeedbackLabel"
+		feedback.text = "Aucune lettre sélectionnée"
+		feedback.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		vbox.add_child(feedback)
+
+	# Spacer
+	var spacer5 = Control.new()
+	spacer5.custom_minimum_size = Vector2(0, 20)
+	vbox.add_child(spacer5)
+
+	# === BOUTONS D'ACTION ===
+	var button_container = HBoxContainer.new()
+	button_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_child(button_container)
+
+	# Bouton Annuler
+	var cancel_button = Button.new()
+	cancel_button.text = "Annuler"
+	cancel_button.custom_minimum_size = Vector2(120, 40)
+	cancel_button.pressed.connect(func():
+		overlay.queue_free()
+		popup_active = false
+	)
+	button_container.add_child(cancel_button)
+
+	# Spacer entre boutons
+	var button_spacer = Control.new()
+	button_spacer.custom_minimum_size = Vector2(10, 0)
+	button_container.add_child(button_spacer)
+
+	# Bouton Passer
+	var pass_only_button = Button.new()
+	pass_only_button.text = "Passer sans échanger"
+	pass_only_button.custom_minimum_size = Vector2(180, 40)
+	pass_only_button.pressed.connect(func():
+		overlay.queue_free()
+		popup_active = false
+		game_state_sync.pass_turn()
+		# status_label.text = "⏭️ Tour passé..."
+	)
+	button_container.add_child(pass_only_button)
+
+	# Spacer entre boutons
+	var button_spacer2 = Control.new()
+	button_spacer2.custom_minimum_size = Vector2(10, 0)
+	button_container.add_child(button_spacer2)
+
+	if (remaining_tiles > 0):
+		# Bouton Échanger
+		var exchange_button = Button.new()
+		exchange_button.text = "Échanger et passer"
+		exchange_button.custom_minimum_size = Vector2(180, 40)
+		exchange_button.disabled = true  # Désactivé tant qu'aucune lettre n'est sélectionnée
+		exchange_button.name = "ExchangeButton"
+		exchange_button.pressed.connect(func():
+			if selected_indices.is_empty():
+				return
+			overlay.queue_free()
+			popup_active = false
+			game_state_sync.exchange_tiles(selected_indices)
+			# status_label.text = "🔄 Échange de lettres..."
+		)
+		button_container.add_child(exchange_button)
+
+func _create_selectable_tile(tile_data: Dictionary, index: int, selected_indices: Array) -> Button:
+	"""Crée un bouton-tuile cliquable pour la sélection"""
+
+	var tile_button = Button.new()
+	tile_button.custom_minimum_size = Vector2(60, 60)
+	tile_button.modulate = Color(0.95, 0.9, 0.7)  # Couleur normale
+
+	# Label pour la lettre
+	var letter_lbl = Label.new()
+	letter_lbl.text = tile_data.letter
+	letter_lbl.add_theme_font_size_override("font_size", 30)
+	letter_lbl.position = Vector2(12, 3)
+	letter_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Important !
+	tile_button.add_child(letter_lbl)
+
+	# Label pour la valeur
+	var value_lbl = Label.new()
+	var value = tile_data.value
+	if value == floor(value):
+		value_lbl.text = str(int(value))
+	else:
+		value_lbl.text = "%.1f" % value
+	value_lbl.add_theme_font_size_override("font_size", 15)
+	value_lbl.position = Vector2(36, 33)
+	value_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tile_button.add_child(value_lbl)
+
+	# Gestion du clic
+	tile_button.pressed.connect(func():
+		_toggle_tile_selection(tile_button, index, selected_indices)
+	)
+
+	return tile_button
+
+func _toggle_tile_selection(tile_button: Button, index: int, selected_indices: Array) -> void:
+	"""Toggle la sélection d'une tuile dans le popup"""
+	# Chercher le CanvasLayer parent
+	var canvas_layer = get_node_or_null("CanvasLayer")
+	
+	if not canvas_layer:
+		print("❌ ERREUR : CanvasLayer introuvable !")
+		return
+	var overlay = canvas_layer.get_node_or_null("PassOverlay")
+	if not overlay:
+		return
+
+	var feedback = overlay.find_child("FeedbackLabel", true, false)
+	var exchange_button = overlay.find_child("ExchangeButton", true, false)
+
+	if index in selected_indices:
+		# Désélectionner
+		selected_indices.erase(index)
+		tile_button.modulate = Color(0.95, 0.9, 0.7)  # Couleur normale
+	else:
+		# Sélectionner
+		selected_indices.append(index)
+		tile_button.modulate = Color(1.0, 1.0, 0.3)  # Jaune vif
+
+	# Mettre à jour le feedback
+	if selected_indices.is_empty():
+		feedback.text = "Aucune lettre sélectionnée %d" % index
+		exchange_button.disabled = true
+	else:
+		feedback.text = "%d lettre(s) sélectionnée(s)" % selected_indices.size()
+		exchange_button.disabled = false
 
 func _on_play_pressed() -> void:
 	"""Jouer le coup (envoi au serveur)"""
@@ -496,7 +719,7 @@ func _create_score_board() -> void:
 	var all_scores = game_state_sync.get_all_scores()
 	
 	# Trier par score décroissant
-	all_scores.sort_custom(func(a, b): return a.score > b.score)
+	# all_scores.sort_custom(func(a, b): return a.score > b.score)
 	
 	# Créer une carte pour chaque joueur
 	for score_data in all_scores:
@@ -534,7 +757,7 @@ func _create_player_card_horizontal(score_data: Dictionary, all_scores: Array) -
 		style.border_width_right = 3
 		style.border_width_top = 3
 		style.border_width_bottom = 3
-		style.border_color = Color(0.3, 0.8, 0.3)
+		style.border_color = Color(1.3, 0.1, 1.3)
 	elif score_data.is_me:
 		# Nous : fond bleu
 		style.bg_color = Color(0.85, 0.92, 1.0)
@@ -542,7 +765,7 @@ func _create_player_card_horizontal(score_data: Dictionary, all_scores: Array) -
 		style.border_width_right = 2
 		style.border_width_top = 2
 		style.border_width_bottom = 2
-		style.border_color = Color(0.4, 0.6, 1.0)
+		style.border_color = Color(0.3, 0.4, 1.0)
 	else:
 		# Autres : fond gris
 		style.bg_color = Color(0.95, 0.95, 0.95)
@@ -563,7 +786,7 @@ func _create_player_card_horizontal(score_data: Dictionary, all_scores: Array) -
 	var name_label = Label.new()
 	name_label.text = score_data.name
 	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_label.add_theme_font_size_override("font_size", 14)
+	name_label.add_theme_font_size_override("font_size", 18)
 	name_label.add_theme_color_override("font_color", Color(0.2, 0.2, 0.8))
 	
 	# Mettre en couleur si c'est nous
@@ -582,30 +805,30 @@ func _create_player_card_horizontal(score_data: Dictionary, all_scores: Array) -
 	if score_data.name == current_player_name:
 		var indicator = Label.new()
 		indicator.text = "⬤"  # Point lumineux
-		indicator.add_theme_font_size_override("font_size", 12)
-		indicator.add_theme_color_override("font_color", Color(0.2, 0.8, 0.2))
+		indicator.add_theme_font_size_override("font_size", 14)
+		indicator.add_theme_color_override("font_color", Color(0.4, 0.1, 0.6))
 		score_hbox.add_child(indicator)
 	
 	# Score
 	var score_label = Label.new()
-	score_label.text = str(score_data.score)
-	score_label.add_theme_font_size_override("font_size", 18)
+	score_label.text = str(int(score_data.score))
+	score_label.add_theme_font_size_override("font_size", 24)
 	score_label.add_theme_color_override("font_color", Color(0.2, 0.2, 0.2))
 	score_hbox.add_child(score_label)
 	
 	# Unité "pts"
-	var pts_label = Label.new()
-	pts_label.text = " pts"
-	pts_label.add_theme_font_size_override("font_size", 10)
-	pts_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
-	score_hbox.add_child(pts_label)
+	#var pts_label = Label.new()
+	#pts_label.text = " pts"
+	#pts_label.add_theme_font_size_override("font_size", 10)
+	#pts_label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+	#score_hbox.add_child(pts_label)
 	
 	# Médaille pour le leader
-	if all_scores.size() > 0 and all_scores[0] == score_data and score_data.score > 0:
-		var medal = Label.new()
-		medal.text = "🏆"
-		medal.add_theme_font_size_override("font_size", 14)
-		score_hbox.add_child(medal)
+	#if all_scores.size() > 0 and all_scores[0] == score_data and score_data.score > 0:
+		#var medal = Label.new()
+		#medal.text = "🏆"
+		#medal.add_theme_font_size_override("font_size", 14)
+		#score_hbox.add_child(medal)
 	
 	return panel
 # ============================================================================
@@ -647,7 +870,8 @@ func _show_end_game_popup(winner_name: String) -> void:
 	# Créer le panel principal
 	var panel = Panel.new()
 	panel.custom_minimum_size = Vector2(400, 300)
-	panel.position = (viewport_size - panel.custom_minimum_size) / 2
+	var panelWidth = (viewport_size.x - panel.custom_minimum_size.x) / 2
+	panel.position = Vector2(panelWidth, 100)
 	overlay.add_child(panel)
 	
 	# Conteneur vertical
@@ -687,7 +911,7 @@ func _show_end_game_popup(winner_name: String) -> void:
 	for score_data in all_scores:
 		var score_line = Label.new()
 		var prefix = "🥇 " if score_data == all_scores[0] else "   "
-		score_line.text = prefix + score_data.name + " : " + str(score_data.score) + " points"
+		score_line.text = prefix + score_data.name + " : " + str(int(score_data.score)) + " points"
 		score_line.add_theme_font_size_override("font_size", 16)
 		vbox.add_child(score_line)
 	
@@ -727,12 +951,14 @@ func _create_joker_letter_popup(joker_pos: Vector2i, tile_node: Panel) -> void:
 		print("❌ ERREUR : CanvasLayer introuvable !")
 		return
 	
+	popup_active = true
 	# Créer un fond semi-transparent
 	var overlay = ColorRect.new()
 	overlay.name = "JokerOverlay"
 	overlay.color = Color(0, 0, 0, 0.7)
 	overlay.size = viewport_size
 	overlay.position = Vector2.ZERO
+	overlay.mouse_filter = Control.MOUSE_FILTER_STOP
 	canvas_layer.add_child(overlay)  # ✅ Ajouter au CanvasLayer existant
 	
 	# Créer le panel principal
@@ -758,7 +984,7 @@ func _create_joker_letter_popup(joker_pos: Vector2i, tile_node: Panel) -> void:
 	# Grille de lettres (3 lignes de ~9 lettres)
 	var letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	var grid_container = GridContainer.new()
-	grid_container.columns = 9
+	grid_container.columns = 7
 	grid_container.add_theme_constant_override("h_separation", 5)
 	grid_container.add_theme_constant_override("v_separation", 5)
 	vbox.add_child(grid_container)
@@ -807,6 +1033,7 @@ func _on_joker_letter_selected(letter: String, joker_pos: Vector2i, tile_node: P
 	
 	# Fermer le popup
 	overlay.queue_free()
+	popup_active = false
 	
 	# Revalider le mouvement
 	_validate_current_move()
@@ -834,6 +1061,7 @@ func _on_joker_selection_cancelled(joker_pos: Vector2i, tile_node: Panel, overla
 	
 	# Fermer le popup
 	overlay.queue_free()
+	popup_active = false
 	
 	# Revalider
 	_validate_current_move()
@@ -962,8 +1190,8 @@ func _show_server_error(error_message: String) -> void:
 # FONCTIONS D'ANIMATION
 # ============================================================================
 
-func animate_to_board_view() -> void:
-	board_manager.animate_to_board_view()
+func animate_to_board_view(col_shift) -> void:
+	board_manager.animate_to_board_view(col_shift)
 	
 	#var tween = rack_manager.rack_container.create_tween()
 	#tween.set_parallel(true)

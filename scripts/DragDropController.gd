@@ -410,7 +410,7 @@ func _try_drop_on_board(pos: Vector2) -> bool:
 		print("  -> Dropping on board at", board_pos)
 		# ✅ NOUVEAU : Passer en mode focused au premier drop sur le plateau
 		if not board_manager.is_board_focused:
-			board_manager.animate_to_board_view()
+			board_manager.animate_to_board_view(board_pos.x)
 		var tile_data = dragging_tile.get_meta("tile_data")
 		board_manager.set_tile_at(board_pos, tile_data)
 		

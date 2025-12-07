@@ -164,7 +164,7 @@ func calculate_board_limits() -> void:
 # ============================================================================
 # FONCTION : Animer vers la vue "plateau"
 # ============================================================================
-func animate_to_board_view() -> void:
+func animate_to_board_view(col_shift: int) -> void:
 	if is_board_focused:
 		return
 	is_board_focused = true
@@ -173,6 +173,11 @@ func animate_to_board_view() -> void:
 	var tween = board_container.create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(board_container, "scale", Vector2(1.0, 1.0), 0.3).set_trans(Tween.TRANS_SINE)
+	# Recentrer le plateau
+	var total_board_pixel_size = ScrabbleConfig.BOARD_SIZE * (tile_size_board + 2)
+	var start_x = (viewport_size.x - total_board_pixel_size) / 2
+	start_x -= (col_shift - 7) * (tile_size_board + 3) * board_scale_unfocused / 2
+	tween.tween_property(board_container, "position:x", start_x, 0.3).set_trans(Tween.TRANS_SINE)
 
 # ============================================================================
 # FONCTION : Animer vers la vue "chevalet"

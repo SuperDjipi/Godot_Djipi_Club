@@ -192,6 +192,14 @@ func pass_turn() -> void:
 	"""Passe son tour"""
 	send_event("PASS_TURN")
 
+func exchange_tiles(tiles: Array) -> void:
+	"""Envoie une demande d'échange de lettres"""
+	var payload = {
+			"tilesToExchange": tiles
+		}
+	send_event("EXCHANGE_TILES", payload)
+
+
 # ============================================================================
 # NOUVEAU : GESTION DE L'ÉTAT STOCKÉ
 # ============================================================================

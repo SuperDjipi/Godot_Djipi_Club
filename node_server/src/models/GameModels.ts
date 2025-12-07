@@ -82,11 +82,11 @@ export interface GameState {
     board: Board;
     players: Player[];
     tileBag: Tile[];
-    moves: Move[];
     status: GameStatus;
-
+    placedPositions: BoardPosition[];
     turnNumber: number;
     currentPlayerIndex: number;
+    forceEndGame: number;
     // NOTE : currentPlayerRack n'est pas envoyé dans le GameState global
     // pour ne pas révéler le chevalet d'un joueur aux autres.
     // On construira un GameState spécifique pour chaque joueur.
@@ -95,7 +95,7 @@ export interface GameState {
     // Le serveur ne s'occupe que de l'état canonique du jeu.
     // La logique de validation sera faite au moment du traitement du coup.
     /*
-    placedTiles: PlacedTile[];
+    moves: Move[];    
     foundWords: FoundWord[];
     currentMoveScore: number;
     isPlacementValid: boolean;

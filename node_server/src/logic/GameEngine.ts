@@ -12,14 +12,14 @@
 
 // --- IMPORTS ---
 // On importe les types de données (GameState, PlacedTile, etc.)
-import type { GameState, PlacedTile, Player, Board } from '../models/GameModels.js';
+import type { GameState, Tile, PlacedTile, Player, Board } from '../models/GameModels.js';
 // On importe les fonctions utilitaires et les modules de logique spécifiques.
 import { createNewBoard } from '../models/BoardModels.js';
 import { isPlacementValid, isMoveConnected } from './MoveValidator.js';
 import { findAllWordsFormedByMove } from './WordFinder.js';
 import { isWordValid } from './Dictionary.js';
 import { calculateTotalScore } from './ScoreCalculator.js';
-import { drawTiles } from './TileBag.js';
+import { drawTiles, returnTilesToBag } from './TileBag.js';
 
 /**
  * Traite un coup joué par un utilisateur ("Play Move").
@@ -112,9 +112,10 @@ export function processPlayMove(
         board: lockedBoard,
         players: finalPlayers,
         tileBag: currentTileBag,
-        moves: [], // TODO: Implémenter l'historique des coups
+        placedPositions: placedPositions, 
         turnNumber: currentGame.turnNumber + 1,
         currentPlayerIndex: nextPlayerIndex,
+        forceEndGame: 0
     };
 
     // On retourne le nouvel état de jeu. Le contrôleur (`index.ts`) se chargera de le sauvegarder
@@ -122,6 +123,46 @@ export function processPlayMove(
     return nextGameState;
 }
 
-// TODO: Ajouter ici d'autres fonctions pures pour gérer les autres actions du jeu.
-// export function processPassTurn(currentGame: GameState): GameState { ... }
-// export function processExchangeTiles(currentGame: GameState, tilesToExchange: Tile[]): GameState | null { ... }
+export function processExchangeTiles(game: GameState, player: Player, tilesToExchange: Tile[]): GameState {
+    // 1. VALIDATION CÔTÉ SERVEUR (Le point crucial)
+    if (game.tileBag.length < tilesToExchange.length) {
+        // Le client a essayé d'échanger plus de tuiles qu'il n'y en a de disponibles.
+        // On pourrait renvoyer une erreur, ou simplement ignorer l'échange et passer le tour.
+        // Pour être robuste, on ignore et on passe juste le tour.
+        console.warn(`Tentative d'échange invalide par ${player.name}.`);
+        // Simplement passer le tour
+        game.placedPositions = []; // Pas de lettres posées
+        game.currentPlayerIndex = (game.currentPlayerIndex + 1) % game.players.length;
+        game.turnNumber++;
+        game.forceEndGame
+        return game;
+    }
+    // On crée un Set d'IDs à partir des tuiles reçues pour faciliter la recherche
+    const tileIdsToExchange = new Set(tilesToExchange.map(t => t.id));
+    // 2. LOGIQUE D'ÉCHANGE
+    // Séparer les tuiles à garder et celles à échanger
+    const tilesToKeep = player.rack.filter(t => !tileIdsToExchange.has(t.id));
+    const tilesToReturn = player.rack.filter(t => tileIdsToExchange.has(t.id));
+    // console.log(`🔄 ${player.name} laisse les tuiles : ${tilesToKeep.map(t => t.letter).join(", ")}`);
+    // console.log(`🔄 ${player.name} échange les tuiles : ${tilesToReturn.map(t => t.letter).join(", ")}`);
+
+    // 3. PIOCHER D'ABORD : Piocher le même nombre de nouvelles tuiles depuis la pioche actuelle.
+    const { drawnTiles, newBag: bagAfterDrawing } = drawTiles(game.tileBag, tilesToReturn.length);
+
+    // 4. REMETTRE ENSUITE : Ajouter les tuiles écartées à la pioche qui vient d'être utilisée.
+    const finalBag = returnTilesToBag(bagAfterDrawing, tilesToReturn);
+
+    // 5. Mettre à jour le chevalet du joueur
+    player.rack = tilesToKeep.concat(drawnTiles);
+
+    // 6. Mettre à jour l'état principal du jeu
+    game.tileBag = finalBag;
+    game.placedPositions = []; // Pas de lettres posées
+    game.currentPlayerIndex = (game.currentPlayerIndex + 1) % game.players.length;
+    game.turnNumber++;
+    game.forceEndGame = 0;
+
+    console.log(`🔄 ${player.name} a échangé ${tilesToReturn.length} tuile(s).`);
+
+    return game;
+}

@@ -16,7 +16,7 @@ import type { ClientToServerEvent, ServerToClientEvent } from './models/GameEven
 import type { GameState, Tile, UserProfile, Player, PlacedTile } from './models/GameModels.js';
 import { GameStatus } from './models/GameModels.js';
 // Import des modules de logique métier
-import { createTileBag, drawTiles } from './logic/TileBag.js';
+import { createTileBag, drawTiles, createTestBag } from './logic/TileBag.js';
 import { createEmptyBoard, createNewBoard } from './models/BoardModels.js';
 import { gameStateToString } from './models/toStrings.js';
 import { URL } from 'url'; // Utile pour parser l'URL de connexion
@@ -37,14 +37,14 @@ function createTestGame() {
 
     // 1. Créer les profils des joueurs de test
     const playerAlpha: Player = {
-        id: '6dee5c79-729f-4179-aff3-5982b9479119', // ID factice pour le test
+        id: '62f9cee8-512f-47ff-8135-9023ca441bb1', 
         name: 'Alpha',
         score: 0,
         rack: [], // Sera rempli ci-dessous
         isActive: true,
     };
     const playerBeta: Player = {
-        id: '4b17dea3-a071-4474-aec9-31daa9aa22e5', // ID factice pour le test
+        id: 'fd3e97cc-5519-4e10-a4b8-fe1ad611be39', 
         name: 'Djipi',
         score: 0,
         rack: [],
@@ -52,12 +52,17 @@ function createTestGame() {
     };
 
     // 2. Créer une pioche de tuiles et la distribuer
-    let tileBag = createTileBag();
+    let tileBag = createTestBag();
     const { drawnTiles: alphaTiles, newBag: bagAfterAlpha } = drawTiles(tileBag, 7);
-    const { drawnTiles: betaTiles, newBag: finalBag } = drawTiles(bagAfterAlpha, 7);
     playerAlpha.rack = alphaTiles;
+    // Mélange de Fisher-Yates pour un mélange aléatoire efficace
+    for (let i = bagAfterAlpha.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [bagAfterAlpha[i]!, bagAfterAlpha[j]!] = [bagAfterAlpha[j]!, bagAfterAlpha[i]!];
+    }
+    const { drawnTiles: betaTiles, newBag: finalBag } = drawTiles(bagAfterAlpha, 7);
     playerBeta.rack = betaTiles;
-
+    
     // 3. Créer l'état complet de la partie de test
     const testGame: GameState = {
         id: TEST_GAME_ID,
@@ -66,9 +71,10 @@ function createTestGame() {
         players: [playerAlpha, playerBeta],
         tileBag: finalBag,
         status: GameStatus.PLAYING, // La partie est déjà en cours !
-        moves: [],
+        placedPositions: [],
         turnNumber: 1,
         currentPlayerIndex: 0, // Alpha commence
+        forceEndGame: 0,
     };
 
     // 4. Enregistrer la partie dans la mémoire du serveur
@@ -143,7 +149,7 @@ export function prepareStateForPlayer(gameState: GameState, playerId: string): {
             }
             return { ...p, rack: [] }; // On vide le chevalet pour les autres
         }),
-        tileBag: [] // On ne révèle jamais la pioche au client
+        tileBag: { tileCount: gameState.tileBag.length } as any // On passe le nombre de tuiles dans la pioche
     };
     return { stateForPlayer, playerRack };
 }
@@ -310,6 +316,7 @@ async function startServer() {
                     opponents: opponents.length > 0 ? opponents : ["En attente..."], // Liste des noms des adversaires
                     isMyTurn: currentPlayer?.id === playerId, // Est-ce mon tour ?
                     status: game.status,
+                    tileCount: game.tileBag.length,
                     myScore: game.players.find(p => p.id === playerId)?.score || 0,
                     opponentScore: game.players.find(p => p.id !== playerId)?.score || 0 // Simplifié pour 2 joueurs
                 };
@@ -502,9 +509,10 @@ async function startServer() {
                 players: [hostPlayer],
                 tileBag: createTileBag(),
                 status: GameStatus.WAITING_FOR_PLAYERS,
-                moves: [],
+                placedPositions: [],
                 turnNumber: 0,
                 currentPlayerIndex: 0,
+                forceEndGame: 0,
             };
 
             // 4. Sauvegarder la nouvelle partie en mémoire
@@ -589,9 +597,10 @@ async function startServer() {
                 players: [firstPlayer, secondPlayer],
                 tileBag: finalBag,
                 status: GameStatus.PLAYING,
-                moves: [],
+                placedPositions: [],
                 turnNumber: 1,
                 currentPlayerIndex: 0,
+                forceEndGame: 0,
             };
 
             games.set(gameId, newGame);
@@ -601,13 +610,9 @@ async function startServer() {
 
             // TODO: Envoyer une notification à l'adversaire (WebSocket, push notification, etc.)
 
-            const { stateForPlayer, playerRack } = prepareStateForPlayer(newGame, playerId);
-
             res.status(201).json({
                 message: `Défi envoyé à ${opponent.name} !`,
-                gameId: gameId,
-                gameState: stateForPlayer,
-                playerRack: playerRack
+                gameId: gameId
             });
 
             broadcastGameState(gameId, newGame);

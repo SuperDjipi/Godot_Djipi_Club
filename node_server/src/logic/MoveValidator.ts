@@ -57,11 +57,36 @@ export function isPlacementValid(board: Board, placedTiles: BoardPosition[]): bo
     return true;
 }
 
+function isBoardEmpty(board: Board): boolean {
+    /**
+     * Vérifie si le plateau est entièrement vide.
+     * Renvoie true si aucune case ne contient de tuile.
+     */
+    for (let i = 0; i < BOARD_SIZE; i++) {
+        for (let j = 0; j < BOARD_SIZE; j++) {
+            // Si on trouve ne serait-ce qu'une seule tuile, le plateau n'est pas vide.
+            if (board[i]![j]!.tile !== null) {
+                return false;
+            }
+        }
+    }
+    // Si on a parcouru tout le plateau sans trouver de tuile, il est vide.
+    return true;
+}
+
+
+
 export function isMoveConnected(board: Board, placedTiles: BoardPosition[], turnNumber: number): boolean {
     const centerPos = Math.floor(BOARD_SIZE / 2);
 
-    if (turnNumber === 1) {
-        return placedTiles.some(p => p.row === centerPos && p.col === centerPos);
+    if (isBoardEmpty(board)) {
+        // Si le plateau est vide, c'est le PREMIER coup.
+        // Il doit obligatoirement passer par la case centrale.
+        const isTouchingCenter = placedTiles.some(p => p.row === centerPos && p.col === centerPos);
+        if (!isTouchingCenter) {
+            console.log("Validation échec : le premier coup doit passer par la case centrale.");
+        }
+        return isTouchingCenter;
     }
 
     const adjacentOffsets = [{row: -1, col: 0}, {row: 1, col: 0}, {row: 0, col: -1}, {row: 0, col: 1}];

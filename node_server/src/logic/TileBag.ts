@@ -47,6 +47,42 @@ export function createTileBag(): Tile[] {
 
     console.log(`Pioche créée avec ${bag.length} tuiles.`);
     return bag;
+}/**
+
+ * Crée une nouvelle pioche de tuiles, mélangée.
+ */
+export function createTestBag(): Tile[] {
+    const bag: Tile[] = [];
+    let idCounter = 0;
+
+    for (const [letter, data] of Object.entries(TILE_DISTRIBUTION)) {
+        for (let i = 0; i < data.count; i++) {
+            bag.push({
+                id: `tile-${idCounter++}`,
+                letter: letter,
+                points: data.points,
+                isJoker: letter === '_',
+                assignedLetter: null
+            });
+        }
+    }
+    // Pour tester le joker
+    // [bag[0] -> A
+    [bag[1]!, bag[9]!] = [bag[9]!, bag[1]!];  // -> B
+    [bag[2]!, bag[11]!] = [bag[11]!, bag[2]!]; // -> C
+    [bag[3]!, bag[16]!] = [bag[16]!, bag[3]!]; // -> E
+    [bag[4]!, bag[48]!] = [bag[48]!, bag[4]!]; // -> L
+    [bag[5]!, bag[68]!] = [bag[68]!, bag[5]!]; // -> R
+    [bag[6]!, bag[100]!] = [bag[100]!, bag[6]!]; // -> joker
+
+    // Mélange de Fisher-Yates pour un mélange aléatoire efficace
+    // for (let i = bag.length - 1; i > 7; i--) {
+    //     const j = Math.floor(Math.random() * (i + 1));
+    //     [bag[i]!, bag[j]!] = [bag[j]!, bag[i]!];
+    // }
+
+    console.log(`Pioche test créée avec ${bag.length} tuiles.`);
+    return bag;
 }
 
 /**
@@ -59,4 +95,8 @@ export function drawTiles(bag: Tile[], count: number): { drawnTiles: Tile[], new
     const drawnTiles = bag.slice(0, count);
     const newBag = bag.slice(count);
     return { drawnTiles, newBag };
+}
+
+export function returnTilesToBag(bag: Tile[], tiles: Tile[]): Tile[] {
+    return bag.concat(tiles);
 }

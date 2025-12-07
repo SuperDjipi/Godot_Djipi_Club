@@ -40,20 +40,23 @@ fit_content = true
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="PlayerNameInput" type="LineEdit" parent="VBoxContainer"]
+[node name="AuthContainer" type="VBoxContainer" parent="VBoxContainer"]
+layout_mode = 2
+
+[node name="PlayerNameInput" type="LineEdit" parent="VBoxContainer/AuthContainer"]
 layout_mode = 2
 placeholder_text = "Votre pseudo"
 
-[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer"]
+[node name="HBoxContainer" type="HBoxContainer" parent="VBoxContainer/AuthContainer"]
 layout_mode = 2
 alignment = 1
 
-[node name="RegisterButton" type="Button" parent="VBoxContainer/HBoxContainer"]
+[node name="RegisterButton" type="Button" parent="VBoxContainer/AuthContainer/HBoxContainer"]
 custom_minimum_size = Vector2(0, 40)
 layout_mode = 2
 text = "S'inscrire"
 
-[node name="LoginButton" type="Button" parent="VBoxContainer/HBoxContainer"]
+[node name="LoginButton" type="Button" parent="VBoxContainer/AuthContainer/HBoxContainer"]
 layout_mode = 2
 text = "Se connecter"
 
@@ -69,3 +72,6 @@ autowrap_mode = 2
 
 [node name="HSeparator2" type="HSeparator" parent="VBoxContainer"]
 layout_mode = 2
+
+[node name="RefreshTimer" type="Timer" parent="."]
+wait_time = 30.0
