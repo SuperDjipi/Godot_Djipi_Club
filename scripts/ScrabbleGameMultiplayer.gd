@@ -658,7 +658,10 @@ func _on_my_turn_started() -> void:
 func _on_my_turn_ended() -> void:
 	"""Appelé quand notre tour se termine"""
 	var current_player = game_state_sync.get_current_player_name()
-	
+	# 🆕 Retourner les tuiles temporaires si présentes
+	if not drag_drop_controller.get_temp_tiles().is_empty():
+		print("⚠️ Des tuiles temporaires étaient encore présentes...")
+		_return_temp_tiles_to_rack()
 	# Désactiver tous les boutons d'action
 	play_button.disabled = true
 	pass_button.disabled = true

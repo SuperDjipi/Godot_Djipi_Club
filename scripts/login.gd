@@ -40,6 +40,8 @@ func _ready():
 	network_manager.connected_to_server.connect(_on_connected_to_server)
 	network_manager.error_received.connect(_on_error_received)
 	
+	#get_tree().notification = _on_app_notification
+	
 	# Créer les sections dynamiques
 	_create_ui_sections()
 
@@ -54,6 +56,24 @@ func _ready():
 		_check_saved_credentials_and_auto_login()
 	
 	print("✅ Initialisation terminée")
+
+# ============================================================================
+# Retour d'arrière-plan
+# ============================================================================
+
+
+func _notification(what: int) -> void:
+	"""
+	Appelé pour chaque notification globale de l'application.
+	On filtre pour ne réagir qu'à la notification de reprise.
+	"""
+	# On vérifie si la notification est bien celle de la reprise de l'application
+	if what == NOTIFICATION_APPLICATION_RESUMED:
+		print("📱 Application revenue au premier plan (via NOTIFICATION_APP_RESUMED). Rafraîchissement des données.")
+		
+		# On ne rafraîchit que si le joueur est connecté.
+		if PlayerSession.is_logged_in():
+			refresh_games_list()
 
 # ============================================================================
 # CRÉATION DE L'INTERFACE

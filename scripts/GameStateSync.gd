@@ -1,16 +1,20 @@
 # game_state_sync.gd
 # ============================================================================
-# SYNCHRONISEUR D'ÉTAT DE JEU - VERSION 2.0
+# SYNCHRONISEUR D'ÉTAT DE JEU - VERSION COMPLÈTE
 # ============================================================================
 # Améliorations :
 # - Gestion de l'état initial stocké dans NetworkManager
 # - Variable game_has_started pour détecter la reprise de partie
 # - Gestion améliorée du premier tour
+# - 🆕 Sauvegarde et restauration de l'ordre du chevalet
+# - 🆕 Nettoyage des race conditions
+# - Animation des tuiles nouvellement posées
+# - Échange de lettres
+# - Compteur de tuiles dans le sac
 # ============================================================================
 
 extends Node
 class_name GameStateSync
-
 
 # Références
 var network_manager: Node
@@ -23,7 +27,10 @@ var drag_drop_controller: DragDropController
 var current_game_state: Dictionary = {}
 var my_player_id: String = ""
 var is_my_turn: bool = false
-var game_has_started: bool = false  # NOUVEAU : Pour détecter la reprise
+var game_has_started: bool = false  # Pour détecter la reprise
+
+# 🆕 Sauvegarde de l'ordre du chevalet
+var saved_rack_order: Array = []  # Array de tile IDs dans l'ordre
 
 # Signaux
 signal my_turn_started()
@@ -34,6 +41,7 @@ signal game_ended(winner: String)
 # ============================================================================
 # INITIALISATION
 # ============================================================================
+
 func initialize(
 	net_mgr: Node,
 	game: Node2D,
@@ -47,11 +55,14 @@ func initialize(
 	rack_manager = rack_mgr
 	drag_drop_controller = drag_ctrl
 	
+	# Connexion aux signaux du NetworkManager
 	network_manager.game_state_received.connect(_on_game_state_received)
 	network_manager.error_received.connect(_on_error_received)
 	
+	# Récupérer l'ID du joueur
 	my_player_id = network_manager.player_id
 	
+	# Récupérer l'état initial si disponible
 	var last_state = network_manager.get_last_game_state()
 	
 	if not last_state.is_empty():
@@ -60,7 +71,8 @@ func initialize(
 	else:
 		print("État vide")
 	
-	print("GameStateSync initialisé")
+	print("🔄 GameStateSync initialisé pour le joueur : ", my_player_id)
+
 # ============================================================================
 # RÉCEPTION DE L'ÉTAT DU JEU DEPUIS LE SERVEUR
 # ============================================================================
@@ -76,9 +88,10 @@ func _on_game_state_received(payload: Dictionary) -> void:
 			"board": [...],
 			"players": [...],
 			"status": "PLAYING",
-			"tileBag": nombre de tuiles restantes
+			"tileBag": {"tileCount": X},
 			"currentPlayerIndex": 0,
-			"turnNumber": 1
+			"turnNumber": 1,
+			"placedPositions": [...]
 		},
 		"playerRack": [
 			{"id": "tile-1", "letter": "A", "points": 1, ...},
@@ -89,20 +102,26 @@ func _on_game_state_received(payload: Dictionary) -> void:
 	
 	print("📥 Réception de l'état du jeu")
 	
+	# 🆕 Sauvegarder l'ordre actuel du chevalet AVANT toute modification
+	_save_rack_order()
+	
+	# 🆕 Nettoyer l'état temporaire AVANT mise à jour
+	_cleanup_temporary_state()
+	
 	current_game_state = payload.get("gameState", {})
 	var player_rack = payload.get("playerRack", [])
 	var status = current_game_state.get("status", "")
 	
-	# 1. Vérifier si la partie est en cours (MODIFIÉ)
+	# 1. Vérifier si la partie est en cours (avec game_has_started)
 	if status == "PLAYING" and not game_has_started:
 		print("🎮 La partie est en cours !")
 		game_has_started = true
 		game_started.emit()
 	
-	# 2. Mettre à jour le plateau
+	# 2. Mettre à jour le plateau (avec animation des nouvelles tuiles)
 	_update_board(current_game_state.get("board", []), current_game_state.get("placedPositions", []))
 	
-	# 3. Mettre à jour le chevalet du joueur
+	# 3. Mettre à jour le chevalet du joueur (avec restauration de l'ordre)
 	_update_rack(player_rack)
 	
 	# 4. Vérifier si c'est notre tour (IMPORTANT pour la reprise)
@@ -111,6 +130,169 @@ func _on_game_state_received(payload: Dictionary) -> void:
 	# 5. Vérifier si la partie est terminée
 	if status == "FINISHED":
 		_handle_game_end()
+
+# ============================================================================
+# NETTOYAGE DE L'ÉTAT TEMPORAIRE (RACE CONDITION FIX)
+# ============================================================================
+
+func _cleanup_temporary_state() -> void:
+	"""
+	🆕 Nettoie toutes les tuiles temporaires et réinitialise l'interface
+	AVANT de recevoir le nouvel état du serveur
+	
+	Cela résout les race conditions entre update_board et update_rack
+	"""
+	
+	# 1. Récupérer les tuiles temporaires
+	var temp_tiles = drag_drop_controller.get_temp_tiles().duplicate()
+	
+	if not temp_tiles.is_empty():
+		print("🧹 Nettoyage de ", temp_tiles.size(), " tuiles temporaires")
+		
+		# Détruire les nodes visuelles des tuiles temporaires
+		for pos in temp_tiles:
+			var cell = board_manager.get_cell_at(pos)
+			var tile_node = TileManager.get_tile_in_cell(cell)
+			
+			if tile_node:
+				tile_node.queue_free()
+			
+			board_manager.set_tile_at(pos, null)
+	
+	# 2. Vider la liste des tuiles temporaires
+	drag_drop_controller.get_temp_tiles().clear()
+	
+	# 3. Réinitialiser l'état du drag
+	if drag_drop_controller.dragging_tile:
+		drag_drop_controller.dragging_tile = null
+		drag_drop_controller.drag_origin = {}
+	
+	# 4. Réinitialiser l'interface (via le jeu principal)
+	if scrabble_game.has_method("_hide_validation_ui"):
+		scrabble_game._hide_validation_ui()
+	
+	# 5. Revenir à la vue chevalet si nécessaire
+	if board_manager.is_board_focused:
+		board_manager.animate_to_rack_view()
+
+# ============================================================================
+# SAUVEGARDE ET RESTAURATION DE L'ORDRE DU CHEVALET
+# ============================================================================
+
+func _save_rack_order() -> void:
+	"""
+	🆕 Sauvegarde l'ordre des tuiles dans le chevalet
+	Utilise les IDs des tuiles pour les retrouver après mise à jour
+	"""
+	
+	saved_rack_order.clear()
+	
+	for i in range(ScrabbleConfig.RACK_SIZE):
+		var tile_data = rack_manager.get_tile_at(i)
+		if tile_data:
+			# Sauvegarder l'ID de la tuile (ou sa lettre+valeur si pas d'ID)
+			var tile_id = tile_data.get("id", "")
+			if tile_id:
+				saved_rack_order.append(tile_id)
+			else:
+				# Fallback : utiliser lettre + valeur comme identifiant
+				saved_rack_order.append({
+					"letter": tile_data.get("letter", ""),
+					"value": tile_data.get("value", 0)
+				})
+		else:
+			saved_rack_order.append(null)
+	
+	if not saved_rack_order.is_empty():
+		print("💾 Ordre du chevalet sauvegardé")
+
+func _restore_rack_with_order(rack_data: Array) -> void:
+	"""
+	🆕 Place les nouvelles tuiles du serveur dans l'ordre précédent si possible
+	"""
+	
+	print("  📂 Tentative de restauration de l'ordre du chevalet...")
+	
+	# Créer une copie de rack_data pour tracking
+	var remaining_tiles = rack_data.duplicate()
+	var placed_count = 0
+	
+	# 1. Essayer de replacer chaque tuile à sa position d'origine
+	for i in range(saved_rack_order.size()):
+		var saved_id = saved_rack_order[i]
+		
+		if saved_id == null:
+			continue
+		
+		# Chercher cette tuile dans les tuiles reçues du serveur
+		var found_tile = null
+		var found_index = -1
+		
+		for j in range(remaining_tiles.size()):
+			var tile = remaining_tiles[j]
+			
+			# Comparaison par ID
+			if typeof(saved_id) == TYPE_STRING:
+				if tile.get("id", "") == saved_id:
+					found_tile = tile
+					found_index = j
+					break
+			# Comparaison par lettre+valeur (fallback)
+			elif typeof(saved_id) == TYPE_DICTIONARY:
+				if tile.get("letter", "") == saved_id.letter and \
+				   tile.get("value", 0) == saved_id.value:
+					found_tile = tile
+					found_index = j
+					break
+		
+		# Si trouvée, placer à la position d'origine
+		if found_tile:
+			var godot_tile = _convert_server_tile_to_godot(found_tile)
+			rack_manager.add_tile_at(i, godot_tile)
+			
+			# Créer la représentation visuelle
+			var cell = rack_manager.get_cell_at(i)
+			var tile_manager = scrabble_game.tile_manager
+			tile_manager.create_tile_visual(godot_tile, cell, rack_manager.tile_size_rack)
+			
+			remaining_tiles.remove_at(found_index)
+			placed_count += 1
+	
+	# 2. Placer les tuiles restantes dans les emplacements vides
+	var next_empty = 0
+	for tile in remaining_tiles:
+		# Trouver le prochain emplacement vide
+		while next_empty < ScrabbleConfig.RACK_SIZE and rack_manager.get_tile_at(next_empty) != null:
+			next_empty += 1
+		
+		if next_empty < ScrabbleConfig.RACK_SIZE:
+			var godot_tile = _convert_server_tile_to_godot(tile)
+			rack_manager.add_tile_at(next_empty, godot_tile)
+			
+			var cell = rack_manager.get_cell_at(next_empty)
+			var tile_manager = scrabble_game.tile_manager
+			tile_manager.create_tile_visual(godot_tile, cell, rack_manager.tile_size_rack)
+			
+			next_empty += 1
+	
+	print("  ✅ Chevalet restauré : ", placed_count, " tuiles à leur position d'origine")
+
+func _fill_rack_default(rack_data: Array) -> void:
+	"""
+	🆕 Remplissage par défaut du chevalet (sans ordre sauvegardé)
+	"""
+	
+	for i in range(min(rack_data.size(), ScrabbleConfig.RACK_SIZE)):
+		var tile_data = rack_data[i]
+		var godot_tile = _convert_server_tile_to_godot(tile_data)
+		
+		# Ajouter au rack
+		rack_manager.add_tile_at(i, godot_tile)
+		
+		# Créer la représentation visuelle
+		var cell = rack_manager.get_cell_at(i)
+		var tile_manager = scrabble_game.tile_manager
+		tile_manager.create_tile_visual(godot_tile, cell, rack_manager.tile_size_rack)
 
 # ============================================================================
 # MISE À JOUR DU PLATEAU
@@ -182,10 +364,9 @@ func _update_board(board_data: Array, placed_positions: Array) -> void:
 				var is_locked = cell_data.get("isLocked", false)
 				if is_locked:
 					# Les tuiles verrouillées ne peuvent pas être déplacées
-					#var tile_node = TileManager.get_tile_in_cell(cell)
-					#if tile_node:
 					tile_node.set_meta("locked", true)
 					tile_node.modulate = Color(0.85, 0.85, 0.65)  # Légèrement plus sombre
+				
 				# Vérifier si cette tuile vient d'être posée
 				if placed_set.has(Vector2i(x, y)):
 					newly_placed_tiles.append(tile_node)
@@ -193,7 +374,7 @@ func _update_board(board_data: Array, placed_positions: Array) -> void:
 	# Animer les tuiles nouvellement posées
 	if not newly_placed_tiles.is_empty():
 		_animate_newly_placed_tiles(newly_placed_tiles)
-		
+
 func _animate_newly_placed_tiles(tiles: Array) -> void:
 	"""
 	Anime les tuiles avec un effet de pulse + flash depuis leur position
@@ -207,7 +388,6 @@ func _animate_newly_placed_tiles(tiles: Array) -> void:
 			continue
 		
 		var original_scale = tile_node.scale
-		# var original_modulate = tile_node.modulate
 		var original_modulate = Color(1.8, 1.8, 0, 1.0)
 		
 		# Commencer invisible et petit
@@ -231,13 +411,15 @@ func _animate_newly_placed_tiles(tiles: Array) -> void:
 		tween.set_parallel(true)
 		tween.tween_property(tile_node, "scale", original_scale, 0.4).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 		tween.tween_property(tile_node, "modulate", original_modulate, 0.4)
+
 # ============================================================================
 # MISE À JOUR DU CHEVALET
 # ============================================================================
 
 func _update_rack(rack_data: Array) -> void:
 	"""
-	Met à jour le chevalet du joueur avec les données du serveur
+	🆕 Met à jour le chevalet du joueur avec les données du serveur
+	Tente de préserver l'ordre précédent si possible
 	
 	Format du rack serveur :
 	[
@@ -252,18 +434,12 @@ func _update_rack(rack_data: Array) -> void:
 	# Vider le chevalet actuel
 	rack_manager.clear_rack()
 	
-	# Remplir avec les nouvelles tuiles
-	for i in range(min(rack_data.size(), ScrabbleConfig.RACK_SIZE)):
-		var tile_data = rack_data[i]
-		var godot_tile = _convert_server_tile_to_godot(tile_data)
-		
-		# Ajouter au rack
-		rack_manager.add_tile_at(i, godot_tile)
-		
-		# Créer la représentation visuelle
-		var cell = rack_manager.get_cell_at(i)
-		var tile_manager = scrabble_game.tile_manager
-		tile_manager.create_tile_visual(godot_tile, cell, rack_manager.tile_size_rack)
+	# 🆕 Si on a un ordre sauvegardé, essayer de le restaurer
+	if not saved_rack_order.is_empty():
+		_restore_rack_with_order(rack_data)
+	else:
+		# Sinon, remplir normalement
+		_fill_rack_default(rack_data)
 
 # ============================================================================
 # CONVERSION DE DONNÉES
@@ -305,7 +481,6 @@ func _convert_godot_tile_to_server(godot_tile: Dictionary) -> Dictionary:
 func _check_if_my_turn() -> void:
 	"""
 	Vérifie si c'est le tour du joueur local
-	AMÉLIORATION : Gère correctement la première connexion / reprise de partie
 	"""
 	
 	var players = current_game_state.get("players", [])
@@ -319,18 +494,11 @@ func _check_if_my_turn() -> void:
 		is_my_turn = (current_player_id == my_player_id)
 		
 		if is_my_turn and not was_my_turn:
-			# Transition : ce n'était pas mon tour, maintenant oui
 			print("✅ C'est votre tour !")
 			my_turn_started.emit()
+		
 		elif not is_my_turn and was_my_turn:
-			# Transition : c'était mon tour, maintenant non
 			print("⏳ En attente de l'autre joueur...")
-			my_turn_ended.emit()
-		elif not is_my_turn and not was_my_turn and game_has_started:
-			# NOUVEAU : Cas de la première connexion - ce n'est pas mon tour
-			var other_player_name = current_player.get("name", "l'adversaire")
-			print("⏳ En attente du tour de ", other_player_name)
-			# Émettre pour mettre à jour l'UI
 			my_turn_ended.emit()
 
 # ============================================================================
@@ -386,6 +554,9 @@ func send_move_to_server() -> void:
 	# Envoyer au serveur
 	network_manager.play_move(placed_tiles)
 	
+	# 🆕 Réinitialiser l'ordre sauvegardé (nouveau coup)
+	saved_rack_order.clear()
+	
 	# Vider les tuiles temporaires (elles seront confirmées par le serveur)
 	temp_tiles.clear()
 
@@ -401,11 +572,16 @@ func pass_turn() -> void:
 		return
 	
 	print("⏭️ Passage de tour")
+	
+	# 🆕 Réinitialiser l'ordre sauvegardé
+	saved_rack_order.clear()
+	
 	network_manager.pass_turn()
 
 # ============================================================================
-# ECHANDE LETTRES
+# ÉCHANGE DE LETTRES
 # ============================================================================
+
 func exchange_tiles(tile_indices: Array) -> void:
 	"""Échange les lettres spécifiées avec le sac"""
 	
@@ -428,11 +604,15 @@ func exchange_tiles(tile_indices: Array) -> void:
 
 	# Envoyer au serveur
 	network_manager.exchange_tiles(tiles_to_exchange)
+	
+	# 🆕 Réinitialiser l'ordre sauvegardé
+	saved_rack_order.clear()
 
 func get_remaining_tiles_in_bag() -> int:
 	"""Retourne le nombre de tuiles restantes dans le sac (depuis l'état du jeu)"""
 	var remaining_tiles = current_game_state.get("tileBag", {}).get("tileCount", -1)
-	return remaining_tiles # current_game_state.get("tileBag", 0)
+	return remaining_tiles
+
 # ============================================================================
 # FIN DE PARTIE
 # ============================================================================
