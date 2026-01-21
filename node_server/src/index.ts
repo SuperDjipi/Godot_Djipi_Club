@@ -23,8 +23,7 @@ import { URL } from 'url'; // Utile pour parser l'URL de connexion
 import { v4 as generateUUID } from 'uuid';
 import { initializeDatabase } from './db/database.js';
 import { handleNewConnection } from './services/webSocketManager.js';
-
-// Juste après vos imports, avant la section "GESTION DES PARTIES EN MÉMOIRE"
+import cors from 'cors';
 
 /**
  * Crée une partie de test pré-remplie pour le développement.

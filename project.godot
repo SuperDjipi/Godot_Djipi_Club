@@ -12,8 +12,9 @@ config_version=5
 
 config/name="LeBarCS"
 run/main_scene="uid://r4mb4gxpvnhn"
-config/features=PackedStringArray("4.5", "Mobile")
-config/icon="res://icon.svg"
+config/features=PackedStringArray("4.5", "GL Compatibility")
+boot_splash/image="uid://pupp2qpuraq6"
+config/icon="uid://pupp2qpuraq6"
 
 [autoload]
 
@@ -24,17 +25,17 @@ PlayerSession="*res://scripts/PlayerSession.gd"
 
 [display]
 
-window/size/viewport_width=700
-window/size/viewport_height=1400
+window/size/viewport_width=720
+window/size/viewport_height=1280
 window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"
 window/handheld/orientation=1
 
 [editor]
 
-version_control/plugin_name="GitPlugin"
 version_control/autoload_on_startup=true
 
 [rendering]
 
-renderer/rendering_method="mobile"
+renderer/rendering_method="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true

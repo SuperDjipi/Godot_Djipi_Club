@@ -7,6 +7,9 @@ extends Node
 # Il est conçu comme un autoload global accessible via ScrabbleConfig.
 # ============================================================================
 
+static func is_web() -> bool:
+	return OS.has_feature("web")
+
 # --- DIMENSIONS DU JEU ---
 const BOARD_SIZE = 15
 const TILE_SIZE = 70
@@ -42,6 +45,7 @@ const LETTER_DISTRIBUTION = {
 # --- PARAMÈTRES D'AUTO-SCROLL ---
 const AUTO_SCROLL_MARGIN = 80.0  # Distance depuis le bord pour déclencher le scroll
 const AUTO_SCROLL_SPEED = 8.0     # Vitesse du défilement automatique
+const AUTO_SCROLL_SPEED_WEB = 5.0     # Vitesse du défilement automatique pour le web
 
 # --- PARAMÈTRES D'ÉCHELLE ---
 const BOARD_SCALE_FOCUSED = 1.0

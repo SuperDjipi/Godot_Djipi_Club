@@ -217,12 +217,15 @@ func auto_scroll_board(mouse_pos: Vector2) -> void:
 		should_scroll_right = true
 
 	# Calculer le déplacement
+	var speed = ScrabbleConfig.AUTO_SCROLL_SPEED
+	if ScrabbleConfig.is_web():
+		speed = ScrabbleConfig.AUTO_SCROLL_SPEED_WEB
 	var scroll_delta = 0.0
 	if should_scroll_right:
-		scroll_delta -= ScrabbleConfig.AUTO_SCROLL_SPEED * intensity # Pour voir plus à droite, on décale la marge vers la gauche (négatif)
+		scroll_delta -= speed * intensity # Pour voir plus à droite, on décale la marge vers la gauche (négatif)
 	if should_scroll_left:
-		scroll_delta += ScrabbleConfig.AUTO_SCROLL_SPEED * intensity # Pour voir plus à gauche, on décale la marge vers la droite (positif)
-
+		scroll_delta += speed * intensity # Pour voir plus à gauche, on décale la marge vers la droite (positif)
+	
 	if scroll_delta != 0.0:
 		var new_x = board_container.position.x + scroll_delta
 		new_x = clamp(new_x, board_min_x, board_max_x)
